@@ -1,0 +1,25 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id             String   @id @default(uuid()) @db.Uuid
+  supabaseUserId String   @unique @map("id_supabase")
+  email          String   @unique @map("correo")
+  rut            String   @unique
+  firstName      String   @map("nombres")
+  lastName       String   @map("apellidos")
+  phone          String?  @map("telefono")
+  specialty      String?  @map("especialidad")
+  position       String?  @map("cargo")
+  active         Boolean  @default(true) @map("activo")
+  createdAt      DateTime @default(now()) @map("creado_en")
+  updatedAt      DateTime @updatedAt @map("actualizado_en")
+
+  @@map("usuarios")
+}
