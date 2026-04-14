@@ -1,4 +1,5 @@
 import { BadRequestException, Injectable } from "@nestjs/common";
+import { User } from "@prisma/client";
 import {
   SupabaseSessionResult,
   SupabaseService,
@@ -15,19 +16,6 @@ type AuthenticatedRequest = {
     email?: string;
   };
   headers?: Record<string, string | string[] | undefined>;
-};
-
-type PerfilUsuario = {
-  id: string;
-  supabaseUserId: string;
-  email: string;
-  rut: string;
-  firstName: string;
-  lastName: string;
-  phone?: string | null;
-  specialty?: string | null;
-  position?: string | null;
-  active: boolean;
 };
 
 @Injectable()
@@ -114,7 +102,7 @@ export class AuthService {
     return token;
   }
 
-  private mapSession(session: SupabaseSessionResult, profile?: PerfilUsuario) {
+  private mapSession(session: SupabaseSessionResult, profile?: User) {
     return {
       access_token: session.accessToken,
       refresh_token: session.refreshToken,

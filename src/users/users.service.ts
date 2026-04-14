@@ -1,10 +1,10 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
-import { Prisma } from "@prisma/client";
+import { Prisma, User } from "@prisma/client";
 import { PrismaService } from "../infrastructure/prisma/prisma.service";
 import { CreateUserProfileDto } from "./dto/create-user-profile.dto";
 import { UpdateUserProfileDto } from "./dto/update-user-profile.dto";
 
-type UsuarioPerfil = {
+type UsuarioPerfil = User & {
   id: string;
   supabaseUserId: string;
   email: string;
@@ -24,7 +24,7 @@ export class UsersService {
   constructor(private readonly prismaService: PrismaService) {}
 
   async createProfile(dto: CreateUserProfileDto): Promise<UsuarioPerfil> {
-    return (this.prismaService as any).usuario.create({
+    return this.prismaService.user.create({
       data: {
         supabaseUserId: dto.supabaseUserId,
         email: dto.email,
@@ -40,7 +40,7 @@ export class UsersService {
   }
 
   async findBySupabaseUserId(supabaseUserId: string): Promise<UsuarioPerfil> {
-    const user = await (this.prismaService as any).usuario.findUnique({
+    const user = await this.prismaService.user.findUnique({
       where: { supabaseUserId },
     });
 
@@ -56,7 +56,7 @@ export class UsersService {
     dto: UpdateUserProfileDto,
   ): Promise<UsuarioPerfil> {
     try {
-      return await (this.prismaService as any).usuario.update({
+      return await this.prismaService.user.update({
         where: { supabaseUserId },
         data: {
           firstName: dto.firstName,

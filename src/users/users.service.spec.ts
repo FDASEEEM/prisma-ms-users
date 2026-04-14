@@ -4,7 +4,7 @@ import { UsersService } from "./users.service";
 
 describe("UsersService", () => {
   const prismaService = {
-    usuario: {
+    user: {
       create: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
@@ -18,7 +18,7 @@ describe("UsersService", () => {
   });
 
   it("creates a profile mapping the Spanish fields", async () => {
-    prismaService.usuario.create.mockResolvedValue({ id: "1" });
+    prismaService.user.create.mockResolvedValue({ id: "1" });
 
     const result = await service.createProfile({
       supabaseUserId: "supabase-1",
@@ -32,7 +32,7 @@ describe("UsersService", () => {
       active: true,
     });
 
-    expect(prismaService.usuario.create).toHaveBeenCalledWith({
+    expect(prismaService.user.create).toHaveBeenCalledWith({
       data: {
         supabaseUserId: "supabase-1",
         email: "docente@correo.com",
@@ -49,7 +49,7 @@ describe("UsersService", () => {
   });
 
   it("returns the profile by Supabase user id", async () => {
-    prismaService.usuario.findUnique.mockResolvedValue({ id: "1" });
+    prismaService.user.findUnique.mockResolvedValue({ id: "1" });
 
     await expect(service.findBySupabaseUserId("supabase-1")).resolves.toEqual({
       id: "1",
@@ -57,7 +57,7 @@ describe("UsersService", () => {
   });
 
   it("throws NotFoundException when profile does not exist", async () => {
-    prismaService.usuario.findUnique.mockResolvedValue(null);
+    prismaService.user.findUnique.mockResolvedValue(null);
 
     await expect(
       service.findBySupabaseUserId("missing"),
@@ -65,14 +65,14 @@ describe("UsersService", () => {
   });
 
   it("updates the editable profile fields", async () => {
-    prismaService.usuario.update.mockResolvedValue({ id: "1" });
+    prismaService.user.update.mockResolvedValue({ id: "1" });
 
     const result = await service.updateProfile("supabase-1", {
       firstName: "Juan Carlos",
       active: false,
     });
 
-    expect(prismaService.usuario.update).toHaveBeenCalledWith({
+    expect(prismaService.user.update).toHaveBeenCalledWith({
       where: { supabaseUserId: "supabase-1" },
       data: {
         firstName: "Juan Carlos",
@@ -93,7 +93,7 @@ describe("UsersService", () => {
       Prisma.PrismaClientKnownRequestError.prototype,
     );
     error.code = "P2025";
-    prismaService.usuario.update.mockRejectedValue(error);
+    prismaService.user.update.mockRejectedValue(error);
 
     await expect(
       service.updateProfile("missing", { firstName: "Juan" }),

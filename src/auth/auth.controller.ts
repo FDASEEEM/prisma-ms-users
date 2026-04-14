@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Headers,
+  HttpCode,
   Patch,
   Post,
   Req,
@@ -40,6 +41,7 @@ export class AuthController {
   }
 
   @Post("login")
+  @HttpCode(200)
   @ApiOperation({ summary: "Iniciar sesión" })
   @ApiBody({ type: LoginDto })
   @ApiResponse({ status: 200, description: "Sesión iniciada correctamente." })
@@ -48,6 +50,7 @@ export class AuthController {
   }
 
   @Post("refresh")
+  @HttpCode(200)
   @ApiOperation({ summary: "Renovar sesión" })
   @ApiBody({ type: RefreshTokenDto })
   @ApiResponse({ status: 200, description: "Sesión renovada correctamente." })
@@ -57,6 +60,7 @@ export class AuthController {
 
   @UseGuards(SupabaseAuthGuard)
   @Post("logout")
+  @HttpCode(200)
   @ApiBearerAuth()
   @ApiOperation({ summary: "Cerrar sesión" })
   @ApiResponse({ status: 200, description: "Sesión cerrada correctamente." })
