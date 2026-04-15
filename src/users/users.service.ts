@@ -1,45 +1,34 @@
 import { Injectable, NotFoundException } from "@nestjs/common";
 import { Prisma, User } from "@prisma/client";
+import { AuditService } from "../infrastructure/audit/audit.service";
 import { PrismaService } from "../infrastructure/prisma/prisma.service";
 import { CreateUserProfileDto } from "./dto/create-user-profile.dto";
 import { UpdateUserProfileDto } from "./dto/update-user-profile.dto";
 
-type UsuarioPerfil = User & {
-  id: string;
-  supabaseUserId: string;
-  email: string;
-  rut: string;
-  firstName: string;
-  lastName: string;
-  phone?: string | null;
-  specialty?: string | null;
-  position?: string | null;
-  active: boolean;
-  createdAt?: Date;
-  updatedAt?: Date;
-};
-
 @Injectable()
 export class UsersService {
-  constructor(private readonly prismaService: PrismaService) {}
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly auditService: AuditService,
+  ) {}
 
-  async createProfile(dto: CreateUserProfileDto): Promise<UsuarioPerfil> {
+  async createProfile(dto: CreateUserProfileDto): Promise<User> {
     return this.prismaService.user.create({
       data: {
         supabaseUserId: dto.supabaseUserId,
         email: dto.email,
         rut: dto.rut,
-        firstName: dto.firstName,
-        lastName: dto.lastName,
+        nombreCompleto: dto.nombreCompleto,
+        establecimiento: dto.establecimiento,
         phone: dto.phone,
         specialty: dto.specialty,
         position: dto.position,
         active: dto.active ?? true,
-      },
+      } as any,
     });
   }
 
-  async findBySupabaseUserId(supabaseUserId: string): Promise<UsuarioPerfil> {
+  async findBySupabaseUserId(supabaseUserId: string): Promise<User> {
     const user = await this.prismaService.user.findUnique({
       where: { supabaseUserId },
     });
@@ -51,23 +40,59 @@ export class UsersService {
     return user;
   }
 
+  async findByEmail(email: string): Promise<User | null> {
+    return this.prismaService.user.findUnique({
+      where: { email },
+    });
+  }
+
   async updateProfile(
     supabaseUserId: string,
     dto: UpdateUserProfileDto,
-  ): Promise<UsuarioPerfil> {
+    ipOrigen?: string,
+  ): Promise<User> {
+    const currentUser = await this.prismaService.user.findUnique({
+      where: { supabaseUserId },
+    });
+
+    if (!currentUser) {
+      throw new NotFoundException("User profile not found.");
+    }
+
     try {
-      return await this.prismaService.user.update({
+      const updatedUser = await this.prismaService.user.update({
         where: { supabaseUserId },
         data: {
-          firstName: dto.firstName,
-          lastName: dto.lastName,
+          nombreCompleto: dto.nombreCompleto,
+          establecimiento: dto.establecimiento,
           phone: dto.phone,
           specialty: dto.specialty,
           position: dto.position,
           active: dto.active,
-        },
+        } as any,
       });
+
+      await this.auditService.registrarEvento({
+        tipoEvento: "profile_update",
+        userId: currentUser.id,
+        resultado: "success",
+        ipOrigen,
+        mensaje: "Actualización de perfil ejecutada correctamente.",
+      });
+
+      return updatedUser;
     } catch (error: unknown) {
+      await this.auditService.registrarEvento({
+        tipoEvento: "profile_update",
+        userId: currentUser.id,
+        resultado: "failure",
+        ipOrigen,
+        mensaje:
+          error instanceof Error
+            ? error.message
+            : "Error inesperado al actualizar el perfil.",
+      });
+
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === "P2025"

@@ -9,9 +9,16 @@ describe("UsersService", () => {
       findUnique: jest.fn(),
       update: jest.fn(),
     },
+    logUsuario: {
+      create: jest.fn(),
+    },
   } as any;
 
-  const service = new UsersService(prismaService);
+  const auditService = {
+    registrarEvento: jest.fn(),
+  } as any;
+
+  const service = new UsersService(prismaService, auditService);
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -24,8 +31,8 @@ describe("UsersService", () => {
       supabaseUserId: "supabase-1",
       email: "docente@correo.com",
       rut: "12.345.678-9",
-      firstName: "Juan",
-      lastName: "Pérez",
+      nombreCompleto: "Juan Pérez",
+      establecimiento: "Liceo San Martín",
       phone: "+56911111111",
       specialty: "Matemáticas",
       position: "Titular",
@@ -37,8 +44,8 @@ describe("UsersService", () => {
         supabaseUserId: "supabase-1",
         email: "docente@correo.com",
         rut: "12.345.678-9",
-        firstName: "Juan",
-        lastName: "Pérez",
+        nombreCompleto: "Juan Pérez",
+        establecimiento: "Liceo San Martín",
         phone: "+56911111111",
         specialty: "Matemáticas",
         position: "Titular",
@@ -65,18 +72,20 @@ describe("UsersService", () => {
   });
 
   it("updates the editable profile fields", async () => {
+    prismaService.user.findUnique.mockResolvedValue({ id: "1" });
     prismaService.user.update.mockResolvedValue({ id: "1" });
 
     const result = await service.updateProfile("supabase-1", {
-      firstName: "Juan Carlos",
+      nombreCompleto: "Juan Carlos Pérez",
+      establecimiento: "Liceo Central",
       active: false,
     });
 
     expect(prismaService.user.update).toHaveBeenCalledWith({
       where: { supabaseUserId: "supabase-1" },
       data: {
-        firstName: "Juan Carlos",
-        lastName: undefined,
+        nombreCompleto: "Juan Carlos Pérez",
+        establecimiento: "Liceo Central",
         phone: undefined,
         specialty: undefined,
         position: undefined,
@@ -87,6 +96,8 @@ describe("UsersService", () => {
   });
 
   it("converts Prisma P2025 into NotFoundException", async () => {
+    prismaService.user.findUnique.mockResolvedValue({ id: "1" });
+
     const error = new Error("Record not found") as Error & { code?: string };
     Object.setPrototypeOf(
       error,
@@ -96,7 +107,7 @@ describe("UsersService", () => {
     prismaService.user.update.mockRejectedValue(error);
 
     await expect(
-      service.updateProfile("missing", { firstName: "Juan" }),
+      service.updateProfile("missing", { nombreCompleto: "Juan" }),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 });

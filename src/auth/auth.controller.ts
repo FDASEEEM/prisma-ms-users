@@ -36,8 +36,8 @@ export class AuthController {
     status: 201,
     description: "Docente registrado correctamente.",
   })
-  register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+  register(@Req() request: Request, @Body() dto: RegisterDto) {
+    return this.authService.register(dto, request.ip);
   }
 
   @Post("login")
@@ -45,8 +45,8 @@ export class AuthController {
   @ApiOperation({ summary: "Iniciar sesión" })
   @ApiBody({ type: LoginDto })
   @ApiResponse({ status: 200, description: "Sesión iniciada correctamente." })
-  login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  login(@Req() request: Request, @Body() dto: LoginDto) {
+    return this.authService.login(dto, request.ip);
   }
 
   @Post("refresh")
@@ -54,8 +54,8 @@ export class AuthController {
   @ApiOperation({ summary: "Renovar sesión" })
   @ApiBody({ type: RefreshTokenDto })
   @ApiResponse({ status: 200, description: "Sesión renovada correctamente." })
-  refresh(@Body() dto: RefreshTokenDto) {
-    return this.authService.refresh(dto);
+  refresh(@Req() request: Request, @Body() dto: RefreshTokenDto) {
+    return this.authService.refresh(dto, request.ip);
   }
 
   @UseGuards(SupabaseAuthGuard)
@@ -64,8 +64,11 @@ export class AuthController {
   @ApiBearerAuth()
   @ApiOperation({ summary: "Cerrar sesión" })
   @ApiResponse({ status: 200, description: "Sesión cerrada correctamente." })
-  logout(@Headers("authorization") authorization?: string) {
-    return this.authService.logout(authorization);
+  logout(
+    @Req() request: Request,
+    @Headers("authorization") authorization?: string,
+  ) {
+    return this.authService.logout(authorization, request.ip);
   }
 
   @UseGuards(SupabaseAuthGuard)
@@ -92,6 +95,7 @@ export class AuthController {
     return this.authService.updateMe(
       request as Request & { user?: { id: string; email?: string } },
       dto,
+      request.ip,
     );
   }
 }

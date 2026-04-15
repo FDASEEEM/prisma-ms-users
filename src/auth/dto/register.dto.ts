@@ -15,13 +15,14 @@ export class RegisterDto {
   @IsString()
   rut!: string;
 
-  @ApiProperty({ example: "Juan" })
+  @ApiProperty({ example: "Juan Pérez" })
   @IsString()
-  firstName!: string;
+  nombreCompleto!: string;
 
-  @ApiProperty({ example: "Pérez" })
+  @ApiPropertyOptional({ example: "Liceo San Martín" })
+  @IsOptional()
   @IsString()
-  lastName!: string;
+  establecimiento?: string;
 
   @ApiPropertyOptional({ example: "+56912345678" })
   @IsOptional()
