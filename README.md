@@ -1,19 +1,14 @@
 ## prisma-ms-users
 
-Microservicio de usuarios en Nest.js para PRISMA. Gestiona registro, autenticación, renovación de sesión, cierre de sesión y perfil extendido de docentes.
-
-### Stack
-
-- `NestJS` para la API.
-- `Supabase Auth` para identidad, login y tokens.
-- `PostgreSQL` + `Prisma` para el perfil extendido en la tabla `users`.
+Microservicio de usuarios en Nest.js para PRISMA. Gestiona autenticación con Supabase, perfil extendido en PostgreSQL y auditoría de eventos de usuario.
 
 ### Responsabilidad
 
 Este servicio actúa como puente entre Supabase Auth y PostgreSQL:
 
 - Crea usuarios en Supabase.
-- Persiste el perfil docente en la tabla `users`.
+- Persiste el perfil docente en la tabla `usuarios`.
+- Registra actividad en `logs_usuarios` para `register`, `login`, `logout`, `refresh` y `profile_update`.
 - Protege endpoints con JWT de Supabase.
 - Aplica compensación si falla la persistencia local después del alta en Supabase.
 
@@ -42,6 +37,19 @@ Retorna el perfil completo del docente autenticado desde PostgreSQL.
 #### `PATCH /api/auth/me`
 
 Actualiza datos editables del perfil. El `rut` no se modifica.
+
+### Flujo validado
+
+Se probó el flujo completo de extremo a extremo:
+
+- `register`
+- `login`
+- `GET /api/auth/me`
+- `PATCH /api/auth/me`
+- `refresh`
+- `logout`
+
+También se confirmó la escritura directa en `logs_usuarios`.
 
 ### Variables de entorno
 
