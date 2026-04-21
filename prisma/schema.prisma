@@ -1,0 +1,55 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String        @id @default(uuid()) @db.Uuid
+  supabaseUserId  String        @unique @map("id_supabase")
+  email           String        @unique @map("correo")
+  rut             String        @unique
+  nombreCompleto  String        @map("nombre_completo")
+  establecimiento  String?       @map("establecimiento")
+  phone           String?       @map("telefono")
+  specialty       String?       @map("especialidad")
+  position        String?       @map("cargo")
+  active          Boolean       @default(true) @map("activo")
+  createdAt       DateTime      @default(now()) @map("creado_en")
+  updatedAt       DateTime      @updatedAt @map("actualizado_en")
+  logs            LogUsuario[]
+
+  @@map("usuarios")
+}
+
+enum TipoEventoUsuario {
+  register
+  login
+  logout
+  refresh
+  profile_update
+}
+
+enum ResultadoOperacion {
+  success
+  failure
+}
+
+model LogUsuario {
+  id          String               @id @default(uuid()) @db.Uuid
+  tipoEvento  TipoEventoUsuario    @map("tipo_evento")
+  userId      String?              @map("user_id") @db.Uuid
+  ipOrigen    String?              @map("ip_origen")
+  resultado   ResultadoOperacion   @map("resultado")
+  mensaje     String               @map("mensaje")
+  fechaHora   DateTime             @default(now()) @map("fecha_hora")
+
+  user        User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([fechaHora])
+  @@map("logs_usuarios")
+}
