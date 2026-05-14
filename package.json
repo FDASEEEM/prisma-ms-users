@@ -60,9 +60,24 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "collectCoverageFrom": [
-      "src/**/*.(t|j)s"
+      "src/**/*.(t|j)s",
+      "!src/main.ts",
+      "!src/app.module.ts",
+      "!src/auth/auth.module.ts",
+      "!src/users/users.module.ts",
+      "!src/infrastructure/audit/audit.module.ts",
+      "!src/infrastructure/prisma/prisma.module.ts",
+      "!src/infrastructure/supabase/supabase.module.ts"
     ],
     "coverageDirectory": "./coverage",
+    "coverageThreshold": {
+      "global": {
+        "statements": 90,
+        "branches": 90,
+        "functions": 90,
+        "lines": 90
+      }
+    },
     "testEnvironment": "node"
   }
 }
