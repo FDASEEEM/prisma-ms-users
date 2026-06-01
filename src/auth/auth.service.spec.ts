@@ -56,6 +56,19 @@ describe("AuthService", () => {
       expires_in: 3600,
       user: { id: "perfil-1" },
     });
+
+    expect(usersService.createProfile).toHaveBeenCalledWith({
+      supabaseUserId: "supabase-1",
+      email: "docente@correo.com",
+      rut: "12.345.678-9",
+      nombreCompleto: "Juan Pérez",
+      establecimiento: "Liceo San Martín",
+      phone: undefined,
+      specialty: undefined,
+      position: undefined,
+      active: true,
+      role: "TEACHER",
+    });
   });
 
   it("rolls back Supabase user when profile persistence fails", async () => {

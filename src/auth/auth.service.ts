@@ -43,6 +43,7 @@ export class AuthService {
         specialty: dto.specialty,
         position: dto.position,
         active: true,
+        role: "TEACHER",
       });
 
       await this.auditService.registrarEvento({

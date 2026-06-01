@@ -2,10 +2,12 @@ import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
 import {
   IsBoolean,
   IsEmail,
+  IsIn,
   IsOptional,
   IsString,
   MinLength,
 } from "class-validator";
+import { USER_ROLES, type UserRole } from "../user-role";
 
 export class CreateUserProfileDto {
   @ApiProperty({ example: "supabase-user-id" })
@@ -49,4 +51,9 @@ export class CreateUserProfileDto {
   @IsOptional()
   @IsBoolean()
   active?: boolean;
+
+  @ApiPropertyOptional({ enum: USER_ROLES, example: "TEACHER" })
+  @IsOptional()
+  @IsIn(USER_ROLES)
+  role?: UserRole;
 }

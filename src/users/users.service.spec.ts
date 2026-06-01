@@ -37,6 +37,7 @@ describe("UsersService", () => {
       specialty: "Matemáticas",
       position: "Titular",
       active: true,
+      role: "TEACHER",
     });
 
     expect(prismaService.user.create).toHaveBeenCalledWith({
@@ -50,6 +51,7 @@ describe("UsersService", () => {
         specialty: "Matemáticas",
         position: "Titular",
         active: true,
+        role: "TEACHER",
       },
     });
     expect(result).toEqual({ id: "1" });

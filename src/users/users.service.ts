@@ -24,6 +24,7 @@ export class UsersService {
         specialty: dto.specialty,
         position: dto.position,
         active: dto.active ?? true,
+        role: dto.role ?? "TEACHER",
       } as any,
     });
   }

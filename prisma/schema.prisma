@@ -12,6 +12,7 @@ model User {
   supabaseUserId  String        @unique @map("id_supabase")
   email           String        @unique @map("correo")
   rut             String        @unique
+  role            UserRole      @default(TEACHER) @map("rol")
   nombreCompleto  String        @map("nombre_completo")
   establecimiento  String?       @map("establecimiento")
   phone           String?       @map("telefono")
@@ -23,6 +24,11 @@ model User {
   logs            LogUsuario[]
 
   @@map("usuarios")
+}
+
+enum UserRole {
+  ADMIN
+  TEACHER
 }
 
 enum TipoEventoUsuario {
