@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Param, Patch, Post, UseGuards } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { PrismaService } from "../infrastructure/prisma/prisma.service";
+import { SupabaseService } from "../infrastructure/supabase/supabase.service";
 import { AdminRoleGuard } from "./guards/admin-role.guard";
 
 @ApiTags("admin")
@@ -8,7 +9,10 @@ import { AdminRoleGuard } from "./guards/admin-role.guard";
 @UseGuards(AdminRoleGuard)
 @Controller("admin")
 export class AdminController {
-  constructor(private readonly prismaService: PrismaService) {}
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly supabaseService: SupabaseService,
+  ) {}
 
   @Get("users/stats")
   @ApiOperation({ summary: "Estadísticas de usuarios para el panel admin" })
@@ -40,18 +44,23 @@ export class AdminController {
   }
 
   @Post("users")
-  @ApiOperation({ summary: "Crear usuario para profesor" })
-  async createUser(@Body() body: { email: string; nombreCompleto: string; role?: "ADMIN" | "TEACHER" }) {
+  @ApiOperation({ summary: "Crear usuario completo (profesor/admin)" })
+  async createUser(@Body() body: { email: string; nombreCompleto: string; password: string; role?: "ADMIN" | "TEACHER"; rut?: string }) {
     const existing = await this.prismaService.user.findUnique({ where: { email: body.email } });
     if (existing) {
-      return { ok: true, user: existing, message: "User already exists" };
+      return { ok: false, message: "El email ya está registrado" };
+    }
+
+    const supabaseResult = await this.supabaseService.createUserWithPassword(body.email, body.password);
+    if (!supabaseResult?.id) {
+      return { ok: false, message: "Error creando usuario en Supabase" };
     }
 
     const user = await this.prismaService.user.create({
       data: {
         email: body.email,
-        supabaseUserId: `auto-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        rut: `${Date.now().toString().slice(-8).replace(/(\d{2})(\d{3})(\d{3})/, "$1.$2.$3")}-0`,
+        supabaseUserId: supabaseResult.id,
+        rut: body.rut || `${Date.now().toString().slice(-8).replace(/(\d{2})(\d{3})(\d{3})/, "$1.$2.$3")}-0`,
         nombreCompleto: body.nombreCompleto,
         role: body.role ?? "TEACHER",
         active: true,

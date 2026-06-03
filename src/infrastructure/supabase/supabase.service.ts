@@ -148,6 +148,27 @@ export class SupabaseService {
     }
   }
 
+  async createUserWithPassword(
+    email: string,
+    password: string,
+  ): Promise<{ id: string }> {
+    const { adminClient } = this.getClients();
+
+    const createdUser = await adminClient.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+    });
+
+    if (createdUser.error || !createdUser.data.user) {
+      throw new InternalServerErrorException(
+        createdUser.error?.message ?? "Could not create Supabase user.",
+      );
+    }
+
+    return { id: createdUser.data.user.id };
+  }
+
   private mapSession(
     accessToken: string,
     refreshToken: string,
