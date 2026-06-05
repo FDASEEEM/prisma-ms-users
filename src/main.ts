@@ -1,4 +1,8 @@
 import "reflect-metadata";
+import * as path from "path";
+import * as dotenv from "dotenv";
+dotenv.config({ path: path.resolve(__dirname, "..", ".env") });
+
 import { ValidationPipe } from "@nestjs/common";
 import { NestFactory } from "@nestjs/core";
 import { DocumentBuilder, SwaggerModule } from "@nestjs/swagger";
