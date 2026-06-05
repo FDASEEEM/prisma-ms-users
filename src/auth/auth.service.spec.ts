@@ -107,6 +107,19 @@ describe("AuthService", () => {
         mensaje: "Error inesperado en el registro.",
       });
     });
+
+    expect(usersService.createProfile).toHaveBeenCalledWith({
+      supabaseUserId: "supabase-1",
+      email: "docente@correo.com",
+      rut: "12.345.678-9",
+      nombreCompleto: "Juan Pérez",
+      establecimiento: "Liceo San Martín",
+      phone: undefined,
+      specialty: undefined,
+      position: undefined,
+      active: true,
+      role: "TEACHER",
+    });
   });
 
   describe("login", () => {

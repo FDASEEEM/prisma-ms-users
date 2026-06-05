@@ -2,6 +2,7 @@ import { Module } from "@nestjs/common";
 import { ConfigModule } from "@nestjs/config";
 import { AuthModule } from "./auth/auth.module";
 import { AppController } from "./app.controller";
+import { AdminModule } from "./admin/admin.module";
 import { AuditModule } from "./infrastructure/audit/audit.module";
 import { PrismaModule } from "./infrastructure/prisma/prisma.module";
 import { SupabaseModule } from "./infrastructure/supabase/supabase.module";
@@ -15,6 +16,7 @@ import { UsersModule } from "./users/users.module";
     SupabaseModule,
     UsersModule,
     AuthModule,
+    AdminModule,
   ],
   controllers: [AppController],
 })

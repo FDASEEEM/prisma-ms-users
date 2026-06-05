@@ -8,21 +8,65 @@ datasource db {
 }
 
 model User {
-  id              String        @id @default(uuid()) @db.Uuid
-  supabaseUserId  String        @unique @map("id_supabase")
-  email           String        @unique @map("correo")
-  rut             String        @unique
-  nombreCompleto  String        @map("nombre_completo")
-  establecimiento  String?       @map("establecimiento")
-  phone           String?       @map("telefono")
-  specialty       String?       @map("especialidad")
-  position        String?       @map("cargo")
-  active          Boolean       @default(true) @map("activo")
-  createdAt       DateTime      @default(now()) @map("creado_en")
-  updatedAt       DateTime      @updatedAt @map("actualizado_en")
+  id              String       @id @default(uuid()) @db.Uuid
+  supabaseUserId  String       @unique @map("id_supabase")
+  email           String       @unique @map("correo")
+  rut             String       @unique
+  nombreCompleto  String       @map("nombre_completo")
+  establecimiento String?      @map("establecimiento")
+  phone           String?      @map("telefono")
+  specialty       String?      @map("especialidad")
+  position        String?      @map("cargo")
+  active          Boolean      @default(true) @map("activo")
+  createdAt       DateTime     @default(now()) @map("creado_en")
+  updatedAt       DateTime     @updatedAt @map("actualizado_en")
+  role            UserRole     @default(TEACHER) @map("rol")
   logs            LogUsuario[]
 
   @@map("usuarios")
+}
+
+model LogUsuario {
+  id         String             @id @default(uuid()) @db.Uuid
+  tipoEvento TipoEventoUsuario  @map("tipo_evento")
+  userId     String?            @map("user_id") @db.Uuid
+  ipOrigen   String?            @map("ip_origen")
+  resultado  ResultadoOperacion @map("resultado")
+  mensaje    String             @map("mensaje")
+  fechaHora  DateTime           @default(now()) @map("fecha_hora")
+  user       User?              @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+  @@index([fechaHora])
+  @@map("logs_usuarios")
+}
+
+model jobs {
+  id                    String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id               String
+  status                JobStatus      @default(pending)
+  input_source          JobInputSource
+  prompt                String
+  paci_object_key       String
+  paci_file_name        String?
+  paci_content_type     String
+  planning_object_key   String
+  planning_file_name    String?
+  planning_content_type String
+  generated_object_key  String?
+  error_message         String?
+  created_at            DateTime       @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime       @default(now()) @db.Timestamptz(6)
+  started_at            DateTime?      @db.Timestamptz(6)
+  completed_at          DateTime?      @db.Timestamptz(6)
+
+  @@index([status], map: "idx_jobs_status")
+  @@index([user_id, created_at], map: "idx_jobs_user_id_created_at")
+}
+
+enum UserRole {
+  ADMIN
+  TEACHER
 }
 
 enum TipoEventoUsuario {
@@ -38,18 +82,14 @@ enum ResultadoOperacion {
   failure
 }
 
-model LogUsuario {
-  id          String               @id @default(uuid()) @db.Uuid
-  tipoEvento  TipoEventoUsuario    @map("tipo_evento")
-  userId      String?              @map("user_id") @db.Uuid
-  ipOrigen    String?              @map("ip_origen")
-  resultado   ResultadoOperacion   @map("resultado")
-  mensaje     String               @map("mensaje")
-  fechaHora   DateTime             @default(now()) @map("fecha_hora")
+enum JobInputSource {
+  uploaded_file
+  json_form
+}
 
-  user        User?                @relation(fields: [userId], references: [id], onDelete: SetNull)
-
-  @@index([userId])
-  @@index([fechaHora])
-  @@map("logs_usuarios")
+enum JobStatus {
+  pending
+  processing
+  done
+  error
 }

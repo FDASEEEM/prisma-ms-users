@@ -148,6 +148,36 @@ export class SupabaseService {
     }
   }
 
+  async createUserWithPassword(
+    email: string,
+    password: string,
+  ): Promise<{ id: string }> {
+    return this.createUserWithPasswordAndMetadata(email, password);
+  }
+
+  async createUserWithPasswordAndMetadata(
+    email: string,
+    password: string,
+    userMetadata?: Record<string, unknown>,
+  ): Promise<{ id: string }> {
+    const { adminClient } = this.getClients();
+
+    const createdUser = await adminClient.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: userMetadata,
+    });
+
+    if (createdUser.error || !createdUser.data.user) {
+      throw new InternalServerErrorException(
+        createdUser.error?.message ?? "Could not create Supabase user.",
+      );
+    }
+
+    return { id: createdUser.data.user.id };
+  }
+
   private mapSession(
     accessToken: string,
     refreshToken: string,

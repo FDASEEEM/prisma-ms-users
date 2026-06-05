@@ -24,13 +24,28 @@ describe("UsersService", () => {
     jest.clearAllMocks();
   });
 
+  it("creates a profile mapping the Spanish fields", async () => {
+    prismaService.user.create.mockResolvedValue({ id: "1" });
+
+    const result = await service.createProfile({
+      supabaseUserId: "supabase-1",
+      email: "docente@correo.com",
+      rut: "12.345.678-9",
+      nombreCompleto: "Juan Pérez",
+      establecimiento: "Liceo San Martín",
+      phone: "+56911111111",
+      specialty: "Matemáticas",
+      position: "Titular",
+      active: true,
+      role: "TEACHER",
+    });
   describe("createProfile", () => {
     it("maps all DTO fields including active true", async () => {
       prismaService.user.create.mockResolvedValue({ id: "1" });
 
       const result = await service.createProfile({
         supabaseUserId: "supabase-1",
-        email: "docente@correo.com",
+        email: "docente@correo.com", 28 a59 
         rut: "12.345.678-9",
         nombreCompleto: "Juan Pérez",
         establecimiento: "Liceo San Martín",
@@ -38,6 +53,8 @@ describe("UsersService", () => {
         specialty: "Matemáticas",
         position: "Titular",
         active: true,
+        role: "TEACHER",
+      },
       });
 
       expect(prismaService.user.create).toHaveBeenCalledWith({
