@@ -51,7 +51,11 @@ export class AdminController {
       return { ok: false, message: "El email ya está registrado" };
     }
 
-    const supabaseResult = await this.supabaseService.createUserWithPassword(body.email, body.password);
+    const supabaseResult = await this.supabaseService.createUserWithPasswordAndMetadata(
+      body.email,
+      body.password,
+      { role: body.role ?? "TEACHER", nombreCompleto: body.nombreCompleto },
+    );
     if (!supabaseResult?.id) {
       return { ok: false, message: "Error creando usuario en Supabase" };
     }
