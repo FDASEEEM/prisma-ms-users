@@ -1,10 +1,12 @@
 generator client {
-  provider = "prisma-client-js"
+  provider        = "prisma-client-js"
+  previewFeatures = ["multiSchema"]
 }
 
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
+  schemas  = ["users"]
 }
 
 model User {
@@ -23,6 +25,7 @@ model User {
   role            UserRole     @default(TEACHER) @map("rol")
   logs            LogUsuario[]
 
+  @@schema("users")
   @@map("usuarios")
 }
 
@@ -38,35 +41,15 @@ model LogUsuario {
 
   @@index([userId])
   @@index([fechaHora])
+  @@schema("users")
   @@map("logs_usuarios")
-}
-
-model jobs {
-  id                    String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  user_id               String
-  status                JobStatus      @default(pending)
-  input_source          JobInputSource
-  prompt                String
-  paci_object_key       String
-  paci_file_name        String?
-  paci_content_type     String
-  planning_object_key   String
-  planning_file_name    String?
-  planning_content_type String
-  generated_object_key  String?
-  error_message         String?
-  created_at            DateTime       @default(now()) @db.Timestamptz(6)
-  updated_at            DateTime       @default(now()) @db.Timestamptz(6)
-  started_at            DateTime?      @db.Timestamptz(6)
-  completed_at          DateTime?      @db.Timestamptz(6)
-
-  @@index([status], map: "idx_jobs_status")
-  @@index([user_id, created_at], map: "idx_jobs_user_id_created_at")
 }
 
 enum UserRole {
   ADMIN
   TEACHER
+
+  @@schema("users")
 }
 
 enum TipoEventoUsuario {
@@ -75,21 +58,13 @@ enum TipoEventoUsuario {
   logout
   refresh
   profile_update
+
+  @@schema("users")
 }
 
 enum ResultadoOperacion {
   success
   failure
-}
 
-enum JobInputSource {
-  uploaded_file
-  json_form
-}
-
-enum JobStatus {
-  pending
-  processing
-  done
-  error
+  @@schema("users")
 }

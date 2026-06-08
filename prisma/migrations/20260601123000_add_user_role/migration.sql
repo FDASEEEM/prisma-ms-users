@@ -1,4 +1,0 @@
-CREATE TYPE "UserRole" AS ENUM ('ADMIN', 'TEACHER');
-
-ALTER TABLE "usuarios"
-ADD COLUMN "rol" "UserRole" NOT NULL DEFAULT 'TEACHER';
