@@ -7,4 +7,4 @@ coverage
 .idea
 .vscode
 prisma/dev.db
-prisma/*.sqlite
+prisma/*.sqlitepackage-lock.json
