@@ -1,5 +1,5 @@
 import { ApiProperty, ApiPropertyOptional } from "@nestjs/swagger";
-import { IsEmail, IsOptional, IsString, MinLength } from "class-validator";
+import { IsEmail, IsOptional, IsString, IsUUID, MinLength } from "class-validator";
 
 export class RegisterDto {
   @ApiProperty({ example: "docente@correo.com" })
@@ -38,4 +38,9 @@ export class RegisterDto {
   @IsOptional()
   @IsString()
   position?: string;
+
+  @ApiPropertyOptional({ example: "uuid-del-colegio" })
+  @IsOptional()
+  @IsUUID()
+  colegioId?: string;
 }

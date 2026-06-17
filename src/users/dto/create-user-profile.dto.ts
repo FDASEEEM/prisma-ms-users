@@ -5,6 +5,7 @@ import {
   IsIn,
   IsOptional,
   IsString,
+  IsUUID,
   MinLength,
 } from "class-validator";
 import { USER_ROLES, type UserRole } from "../user-role";
@@ -56,4 +57,9 @@ export class CreateUserProfileDto {
   @IsOptional()
   @IsIn(USER_ROLES)
   role?: UserRole;
+
+  @ApiPropertyOptional({ example: "uuid-del-colegio" })
+  @IsOptional()
+  @IsUUID()
+  colegioId?: string;
 }

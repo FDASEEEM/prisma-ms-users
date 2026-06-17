@@ -9,6 +9,25 @@ datasource db {
   schemas  = ["users"]
 }
 
+model Colegio {
+  id           String   @id @default(uuid()) @db.Uuid
+  nombre       String
+  direccion    String
+  telefono     String?  @map("telefono")
+  email        String   @unique @map("email")
+  rut          String   @unique @map("rut")
+  plan         String   @default("basic") @map("plan")
+  fechaInicio  DateTime @default(now()) @map("fecha_inicio")
+  fechaTermino DateTime? @map("fecha_termino")
+  activo       Boolean  @default(true) @map("activo")
+  createdAt    DateTime @default(now()) @map("creado_en")
+  updatedAt    DateTime @updatedAt @map("actualizado_en")
+  users        User[]
+
+  @@schema("users")
+  @@map("colegios")
+}
+
 model User {
   id              String       @id @default(uuid()) @db.Uuid
   supabaseUserId  String       @unique @map("id_supabase")
@@ -23,8 +42,11 @@ model User {
   createdAt       DateTime     @default(now()) @map("creado_en")
   updatedAt       DateTime     @updatedAt @map("actualizado_en")
   role            UserRole     @default(TEACHER) @map("rol")
+  colegioId       String?      @map("colegio_id") @db.Uuid
+  colegio         Colegio?     @relation(fields: [colegioId], references: [id], onDelete: SetNull)
   logs            LogUsuario[]
 
+  @@index([colegioId])
   @@schema("users")
   @@map("usuarios")
 }
@@ -46,6 +68,7 @@ model LogUsuario {
 }
 
 enum UserRole {
+  SUPERADMIN
   ADMIN
   TEACHER
 
@@ -58,6 +81,9 @@ enum TipoEventoUsuario {
   logout
   refresh
   profile_update
+  colegio_create
+  colegio_update
+  colegio_deactivate
 
   @@schema("users")
 }

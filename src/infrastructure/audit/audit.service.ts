@@ -6,7 +6,10 @@ export type TipoEventoUsuario =
   | "login"
   | "logout"
   | "refresh"
-  | "profile_update";
+  | "profile_update"
+  | "colegio_create"
+  | "colegio_update"
+  | "colegio_deactivate";
 
 export type ResultadoOperacion = "success" | "failure";
 

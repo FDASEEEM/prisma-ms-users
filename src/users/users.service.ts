@@ -25,6 +25,7 @@ export class UsersService {
         position: dto.position,
         active: dto.active ?? true,
         role: dto.role ?? "TEACHER",
+        colegioId: dto.colegioId,
       } as any,
     });
   }
