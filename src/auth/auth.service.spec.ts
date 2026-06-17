@@ -62,6 +62,17 @@ describe("AuthService", () => {
         resultado: "success",
         mensaje: "Registro de docente completado correctamente.",
       });
+
+      expect(usersService.createProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          supabaseUserId: "supabase-1",
+          email: "docente@correo.com",
+          rut: "12.345.678-9",
+          nombreCompleto: "Juan Pérez",
+          active: true,
+          role: "TEACHER",
+        }),
+      );
     });
 
     it("rolls back Supabase user when profile persistence fails", async () => {
@@ -106,19 +117,6 @@ describe("AuthService", () => {
         resultado: "failure",
         mensaje: "Error inesperado en el registro.",
       });
-    });
-
-    expect(usersService.createProfile).toHaveBeenCalledWith({
-      supabaseUserId: "supabase-1",
-      email: "docente@correo.com",
-      rut: "12.345.678-9",
-      nombreCompleto: "Juan Pérez",
-      establecimiento: "Liceo San Martín",
-      phone: undefined,
-      specialty: undefined,
-      position: undefined,
-      active: true,
-      role: "TEACHER",
     });
   });
 

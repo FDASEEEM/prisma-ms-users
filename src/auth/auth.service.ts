@@ -44,6 +44,7 @@ export class AuthService {
         position: dto.position,
         active: true,
         role: "TEACHER",
+        colegioId: dto.colegioId,
       });
 
       await this.auditService.registrarEvento({

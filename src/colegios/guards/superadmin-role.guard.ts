@@ -4,14 +4,14 @@ import { SupabaseService } from "../../infrastructure/supabase/supabase.service"
 import { UsersService } from "../../users/users.service";
 
 @Injectable()
-export class AdminRoleGuard implements CanActivate {
+export class SuperAdminRoleGuard implements CanActivate {
   constructor(
     private readonly supabaseService: SupabaseService,
     private readonly usersService: UsersService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<Request & { adminUser?: unknown }>();
+    const request = context.switchToHttp().getRequest<Request & { superAdminUser?: unknown }>();
     const authorization = request.headers.authorization;
 
     if (!authorization) {
@@ -27,11 +27,11 @@ export class AdminRoleGuard implements CanActivate {
     const supabaseUser = await this.supabaseService.getUser(token);
     const profile = await this.usersService.findBySupabaseUserId(supabaseUser.id);
 
-    if (profile.role !== "ADMIN" && profile.role !== "SUPERADMIN") {
-      throw new UnauthorizedException("Admin role required.");
+    if (profile.role !== "SUPERADMIN") {
+      throw new UnauthorizedException("SuperAdmin role required.");
     }
 
-    request.adminUser = profile;
+    request.superAdminUser = profile;
     return true;
   }
 }

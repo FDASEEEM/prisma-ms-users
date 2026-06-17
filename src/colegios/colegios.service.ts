@@ -1,0 +1,211 @@
+import { Injectable, NotFoundException, ConflictException } from "@nestjs/common";
+import { Prisma } from "@prisma/client";
+import { PrismaService } from "../infrastructure/prisma/prisma.service";
+import { SupabaseService } from "../infrastructure/supabase/supabase.service";
+import { AuditService } from "../infrastructure/audit/audit.service";
+import { CreateColegioDto } from "./dto/create-colegio.dto";
+import { UpdateColegioDto } from "./dto/update-colegio.dto";
+
+@Injectable()
+export class ColegiosService {
+  constructor(
+    private readonly prismaService: PrismaService,
+    private readonly supabaseService: SupabaseService,
+    private readonly auditService: AuditService,
+  ) {}
+
+  async create(dto: CreateColegioDto) {
+    const existingEmail = await this.prismaService.colegio.findUnique({ where: { email: dto.email } });
+    if (existingEmail) {
+      throw new ConflictException("Ya existe un colegio con ese email.");
+    }
+
+    const existingRut = await this.prismaService.colegio.findUnique({ where: { rut: dto.rut } });
+    if (existingRut) {
+      throw new ConflictException("Ya existe un colegio con ese RUT.");
+    }
+
+    const existingAdminEmail = await this.prismaService.user.findUnique({ where: { email: dto.adminEmail } });
+    if (existingAdminEmail) {
+      throw new ConflictException("Ya existe un usuario con ese email de admin.");
+    }
+
+    let supabaseUserId: string | null = null;
+    try {
+      const supabaseResult = await this.supabaseService.createUserWithPasswordAndMetadata(
+        dto.adminEmail,
+        dto.adminPassword,
+        { role: "ADMIN", nombreCompleto: dto.adminNombre },
+      );
+      if (!supabaseResult?.id) {
+        throw new Error("Error creando usuario admin en Supabase");
+      }
+      supabaseUserId = supabaseResult.id;
+    } catch (error) {
+      throw new ConflictException(
+        `Error creando el usuario admin: ${error instanceof Error ? error.message : "Error desconocido"}`,
+      );
+    }
+
+    try {
+      const colegio = await this.prismaService.colegio.create({
+        data: {
+          nombre: dto.nombre,
+          direccion: dto.direccion,
+          telefono: dto.telefono,
+          email: dto.email,
+          rut: dto.rut,
+          plan: dto.plan ?? "basic",
+          fechaInicio: dto.fechaInicio ? new Date(dto.fechaInicio) : new Date(),
+          fechaTermino: dto.fechaTermino ? new Date(dto.fechaTermino) : null,
+          activo: dto.activo ?? true,
+        },
+      });
+
+      const adminUser = await this.prismaService.user.create({
+        data: {
+          supabaseUserId,
+          email: dto.adminEmail,
+          rut: `${Date.now().toString().slice(-8).replace(/(\d{2})(\d{3})(\d{3})/, "$1.$2.$3")}-0`,
+          nombreCompleto: dto.adminNombre,
+          role: "ADMIN",
+          colegioId: colegio.id,
+          active: true,
+        },
+      });
+
+      await this.auditService.registrarEvento({
+        tipoEvento: "register",
+        userId: adminUser.id,
+        resultado: "success",
+        mensaje: `Colegio '${colegio.nombre}' creado con admin '${dto.adminNombre}'.`,
+      });
+
+      return {
+        colegio,
+        admin: {
+          id: adminUser.id,
+          email: adminUser.email,
+          nombreCompleto: adminUser.nombreCompleto,
+          role: adminUser.role,
+        },
+      };
+    } catch (error) {
+      if (supabaseUserId) {
+        await this.supabaseService.deleteUser(supabaseUserId);
+      }
+      throw error;
+    }
+  }
+
+  async findAll(query?: { page?: string; limit?: string; activo?: string; plan?: string }) {
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query?.limit) || 20));
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.ColegioWhereInput = {};
+    if (query?.activo !== undefined) {
+      where.activo = query.activo === "true" || query.activo === "1";
+    }
+    if (query?.plan) {
+      where.plan = query.plan;
+    }
+
+    const [total, colegios] = await Promise.all([
+      this.prismaService.colegio.count({ where }),
+      this.prismaService.colegio.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        include: {
+          _count: {
+            select: { users: true },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      data: colegios,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async findOne(id: string) {
+    const colegio = await this.prismaService.colegio.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: { users: true },
+        },
+      },
+    });
+
+    if (!colegio) {
+      throw new NotFoundException(`Colegio con ID ${id} no encontrado.`);
+    }
+
+    return colegio;
+  }
+
+  async update(id: string, dto: UpdateColegioDto) {
+    await this.findOne(id);
+
+    return this.prismaService.colegio.update({
+      where: { id },
+      data: {
+        nombre: dto.nombre,
+        direccion: dto.direccion,
+        telefono: dto.telefono,
+        plan: dto.plan,
+        fechaTermino: dto.fechaTermino ? new Date(dto.fechaTermino) : undefined,
+        activo: dto.activo,
+      },
+    });
+  }
+
+  async deactivate(id: string) {
+    await this.findOne(id);
+
+    return this.prismaService.colegio.update({
+      where: { id },
+      data: { activo: false },
+    });
+  }
+
+  async getStats(id: string) {
+    await this.findOne(id);
+
+    const [totalUsers, activeUsers, admins, teachers, superadmins] = await Promise.all([
+      this.prismaService.user.count({ where: { colegioId: id } }),
+      this.prismaService.user.count({ where: { colegioId: id, active: true } }),
+      this.prismaService.user.count({ where: { colegioId: id, role: "ADMIN" } }),
+      this.prismaService.user.count({ where: { colegioId: id, role: "TEACHER" } }),
+      this.prismaService.user.count({ where: { colegioId: id, role: "SUPERADMIN" } }),
+    ]);
+
+    return { totalUsers, activeUsers, admins, teachers, superadmins };
+  }
+
+  async getProfessors(id: string) {
+    await this.findOne(id);
+
+    return this.prismaService.user.findMany({
+      where: { colegioId: id, role: "TEACHER" },
+      orderBy: { createdAt: "desc" },
+      select: {
+        id: true,
+        email: true,
+        nombreCompleto: true,
+        specialty: true,
+        position: true,
+        active: true,
+        createdAt: true,
+      },
+    });
+  }
+}
