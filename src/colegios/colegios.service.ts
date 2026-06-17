@@ -231,21 +231,46 @@ export class ColegiosService {
     return { totalUsers, activeUsers, admins, teachers, superadmins };
   }
 
-  async getProfessors(id: string) {
+  async getProfessors(id: string, query?: { page?: string; limit?: string; active?: string; specialty?: string }) {
     await this.findOne(id);
 
-    return this.prismaService.user.findMany({
-      where: { colegioId: id, role: "TEACHER" },
-      orderBy: { createdAt: "desc" },
-      select: {
-        id: true,
-        email: true,
-        nombreCompleto: true,
-        specialty: true,
-        position: true,
-        active: true,
-        createdAt: true,
-      },
-    });
+    const page = Math.max(1, Number(query?.page) || 1);
+    const limit = Math.min(100, Math.max(1, Number(query?.limit) || 20));
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.UserWhereInput = { colegioId: id, role: "TEACHER" };
+    if (query?.active !== undefined) {
+      where.active = query.active === "true" || query.active === "1";
+    }
+    if (query?.specialty) {
+      where.specialty = { contains: query.specialty, mode: "insensitive" };
+    }
+
+    const [total, professors] = await Promise.all([
+      this.prismaService.user.count({ where }),
+      this.prismaService.user.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        select: {
+          id: true,
+          email: true,
+          nombreCompleto: true,
+          specialty: true,
+          position: true,
+          active: true,
+          createdAt: true,
+        },
+      }),
+    ]);
+
+    return {
+      data: professors,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    };
   }
 }

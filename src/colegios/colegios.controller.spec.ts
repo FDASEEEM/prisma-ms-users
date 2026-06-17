@@ -121,13 +121,14 @@ describe('ColegiosController', () => {
   });
 
   describe('getProfessors', () => {
-    it('should call service.getProfessors with id', async () => {
-      service.getProfessors.mockResolvedValue([{ id: '1' }] as any);
+    it('should call service.getProfessors with id and query', async () => {
+      const query = { page: '1', limit: '20' };
+      service.getProfessors.mockResolvedValue({ data: [{ id: '1' }], total: 1, page: 1, limit: 20, totalPages: 1 } as any);
 
-      const result = await controller.getProfessors('colegio-id');
+      const result = await controller.getProfessors('colegio-id', query);
 
-      expect(service.getProfessors).toHaveBeenCalledWith('colegio-id');
-      expect(result).toHaveLength(1);
+      expect(service.getProfessors).toHaveBeenCalledWith('colegio-id', query);
+      expect(result.data).toHaveLength(1);
     });
   });
 });

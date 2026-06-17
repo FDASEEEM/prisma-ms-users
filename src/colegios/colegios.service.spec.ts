@@ -214,4 +214,56 @@ describe('ColegiosService', () => {
       });
     });
   });
+
+  describe('getProfessors', () => {
+    it('should return paginated professors for a colegio', async () => {
+      prismaService.colegio.findUnique.mockResolvedValue({ id: 'colegio-id' });
+      prismaService.user.count.mockResolvedValue(2);
+      prismaService.user.findMany.mockResolvedValue([
+        { id: '1', nombreCompleto: 'Prof 1', role: 'TEACHER' },
+        { id: '2', nombreCompleto: 'Prof 2', role: 'TEACHER' },
+      ]);
+
+      const result = await service.getProfessors('colegio-id', { page: '1', limit: '20' });
+
+      expect(result.data).toHaveLength(2);
+      expect(result.total).toBe(2);
+      expect(result.page).toBe(1);
+      expect(result.totalPages).toBe(1);
+    });
+
+    it('should filter professors by active status', async () => {
+      prismaService.colegio.findUnique.mockResolvedValue({ id: 'colegio-id' });
+      prismaService.user.count.mockResolvedValue(1);
+      prismaService.user.findMany.mockResolvedValue([
+        { id: '1', nombreCompleto: 'Prof 1', role: 'TEACHER', active: true },
+      ]);
+
+      await service.getProfessors('colegio-id', { active: 'true' });
+
+      expect(prismaService.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({ active: true }),
+        }),
+      );
+    });
+
+    it('should filter professors by specialty', async () => {
+      prismaService.colegio.findUnique.mockResolvedValue({ id: 'colegio-id' });
+      prismaService.user.count.mockResolvedValue(1);
+      prismaService.user.findMany.mockResolvedValue([
+        { id: '1', nombreCompleto: 'Prof 1', role: 'TEACHER', specialty: 'Matemáticas' },
+      ]);
+
+      await service.getProfessors('colegio-id', { specialty: 'Mate' });
+
+      expect(prismaService.user.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            specialty: { contains: 'Mate', mode: 'insensitive' },
+          }),
+        }),
+      );
+    });
+  });
 });

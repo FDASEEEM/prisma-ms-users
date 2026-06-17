@@ -17,6 +17,7 @@ import { ColegiosService } from "./colegios.service";
 import { CreateColegioDto } from "./dto/create-colegio.dto";
 import { UpdateColegioDto } from "./dto/update-colegio.dto";
 import { PaginationDto } from "./dto/pagination.dto";
+import { ProfessorsPaginationDto } from "./dto/professors-pagination.dto";
 
 type SuperAdminUser = { id: string; email?: string; nombreCompleto?: string };
 
@@ -77,8 +78,8 @@ export class ColegiosController {
   }
 
   @Get(":id/professors")
-  @ApiOperation({ summary: "Profesores del colegio" })
-  getProfessors(@Param("id") id: string) {
-    return this.colegiosService.getProfessors(id);
+  @ApiOperation({ summary: "Profesores del colegio (paginado)" })
+  getProfessors(@Param("id") id: string, @Query() query: ProfessorsPaginationDto) {
+    return this.colegiosService.getProfessors(id, query);
   }
 }
