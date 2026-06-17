@@ -155,6 +155,23 @@ export class SupabaseService {
     return this.createUserWithPasswordAndMetadata(email, password);
   }
 
+  async resetUserPassword(
+    supabaseUserId: string,
+    newPassword: string,
+  ): Promise<void> {
+    const { adminClient } = this.getClients();
+
+    const result = await adminClient.auth.admin.updateUserById(supabaseUserId, {
+      password: newPassword,
+    });
+
+    if (result.error || !result.data.user) {
+      throw new InternalServerErrorException(
+        result.error?.message ?? "Could not reset user password.",
+      );
+    }
+  }
+
   async createUserWithPasswordAndMetadata(
     email: string,
     password: string,

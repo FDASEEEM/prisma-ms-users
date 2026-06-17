@@ -141,8 +141,27 @@ export class ColegiosService {
       }),
     ]);
 
+    const dataWithAdminCounts = await Promise.all(
+      colegios.map(async (colegio) => {
+        const adminCount = await this.prismaService.user.count({
+          where: { colegioId: colegio.id, role: "ADMIN" },
+        });
+        const activeAdminCount = await this.prismaService.user.count({
+          where: { colegioId: colegio.id, role: "ADMIN", active: true },
+        });
+        return {
+          ...colegio,
+          _count: {
+            ...colegio._count,
+            admins: adminCount,
+            activeAdmins: activeAdminCount,
+          },
+        };
+      }),
+    );
+
     return {
-      data: colegios,
+      data: dataWithAdminCounts,
       total,
       page,
       limit,
@@ -164,7 +183,21 @@ export class ColegiosService {
       throw new NotFoundException(`Colegio con ID ${id} no encontrado.`);
     }
 
-    return colegio;
+    const adminCount = await this.prismaService.user.count({
+      where: { colegioId: id, role: "ADMIN" },
+    });
+    const activeAdminCount = await this.prismaService.user.count({
+      where: { colegioId: id, role: "ADMIN", active: true },
+    });
+
+    return {
+      ...colegio,
+      _count: {
+        ...colegio._count,
+        admins: adminCount,
+        activeAdmins: activeAdminCount,
+      },
+    };
   }
 
   async update(id: string, dto: UpdateColegioDto, superAdminUserId?: string, ipOrigen?: string) {
@@ -271,6 +304,29 @@ export class ColegiosService {
       page,
       limit,
       totalPages: Math.ceil(total / limit),
+    };
+  }
+
+  async getAdmins(id: string) {
+    await this.findOne(id);
+
+    const admins = await this.prismaService.user.findMany({
+      where: { colegioId: id, role: "ADMIN" },
+      orderBy: [{ active: "desc" }, { createdAt: "desc" }],
+      select: {
+        id: true,
+        email: true,
+        nombreCompleto: true,
+        rut: true,
+        active: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
+
+    return {
+      data: admins,
+      total: admins.length,
     };
   }
 }

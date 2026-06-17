@@ -84,6 +84,11 @@ enum TipoEventoUsuario {
   colegio_create
   colegio_update
   colegio_deactivate
+  admin_create
+  admin_update
+  admin_deactivate
+  admin_reactivate
+  admin_password_reset
 
   @@schema("users")
 }

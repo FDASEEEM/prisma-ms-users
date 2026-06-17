@@ -9,7 +9,12 @@ export type TipoEventoUsuario =
   | "profile_update"
   | "colegio_create"
   | "colegio_update"
-  | "colegio_deactivate";
+  | "colegio_deactivate"
+  | "admin_create"
+  | "admin_update"
+  | "admin_deactivate"
+  | "admin_reactivate"
+  | "admin_password_reset";
 
 export type ResultadoOperacion = "success" | "failure";
 

@@ -125,27 +125,46 @@ describe('ColegiosService', () => {
   });
 
   describe('findAll', () => {
-    it('should return paginated colegios', async () => {
+    it('should return paginated colegios with admin counts', async () => {
       prismaService.colegio.count.mockResolvedValue(2);
       prismaService.colegio.findMany.mockResolvedValue([
-        { id: '1', nombre: 'Colegio 1' },
-        { id: '2', nombre: 'Colegio 2' },
+        { id: '1', nombre: 'Colegio 1', _count: { users: 5 } },
+        { id: '2', nombre: 'Colegio 2', _count: { users: 3 } },
       ]);
+      // 4 calls expected: 2 colegios * 2 counts (admins, activeAdmins)
+      prismaService.user.count
+        .mockResolvedValueOnce(2)  // colegio 1: admins
+        .mockResolvedValueOnce(1)  // colegio 1: activeAdmins
+        .mockResolvedValueOnce(1)  // colegio 2: admins
+        .mockResolvedValueOnce(1); // colegio 2: activeAdmins
 
       const result = await service.findAll({ page: '1', limit: '20' });
 
       expect(result.data).toHaveLength(2);
       expect(result.total).toBe(2);
+      expect(result.data[0]._count).toEqual({ users: 5, admins: 2, activeAdmins: 1 });
+      expect(result.data[1]._count).toEqual({ users: 3, admins: 1, activeAdmins: 1 });
     });
   });
 
   describe('findOne', () => {
-    it('should return a colegio by id', async () => {
-      prismaService.colegio.findUnique.mockResolvedValue({ id: 'colegio-id', nombre: 'Test' });
+    it('should return a colegio by id with admin counts', async () => {
+      prismaService.colegio.findUnique.mockResolvedValue({
+        id: 'colegio-id',
+        nombre: 'Test',
+        _count: { users: 5 },
+      });
+      prismaService.user.count
+        .mockResolvedValueOnce(2) // admins count
+        .mockResolvedValueOnce(1); // activeAdmins count
 
       const result = await service.findOne('colegio-id');
 
-      expect(result).toEqual({ id: 'colegio-id', nombre: 'Test' });
+      expect(result).toEqual({
+        id: 'colegio-id',
+        nombre: 'Test',
+        _count: { users: 5, admins: 2, activeAdmins: 1 },
+      });
     });
 
     it('should throw NotFoundException if not found', async () => {
@@ -196,12 +215,15 @@ describe('ColegiosService', () => {
   describe('getStats', () => {
     it('should return stats for a colegio', async () => {
       prismaService.colegio.findUnique.mockResolvedValue({ id: 'colegio-id' });
+      // findOne now makes 2 calls (admins, activeAdmins) before getStats makes 5
       prismaService.user.count
-        .mockResolvedValueOnce(10)
-        .mockResolvedValueOnce(8)
-        .mockResolvedValueOnce(2)
-        .mockResolvedValueOnce(6)
-        .mockResolvedValueOnce(0);
+        .mockResolvedValueOnce(2) // findOne: admins count
+        .mockResolvedValueOnce(1) // findOne: activeAdmins count
+        .mockResolvedValueOnce(10) // getStats: totalUsers
+        .mockResolvedValueOnce(8) // getStats: activeUsers
+        .mockResolvedValueOnce(2) // getStats: admins
+        .mockResolvedValueOnce(6) // getStats: teachers
+        .mockResolvedValueOnce(0); // getStats: superadmins
 
       const result = await service.getStats('colegio-id');
 
