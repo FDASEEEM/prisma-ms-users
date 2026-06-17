@@ -81,6 +81,9 @@ enum TipoEventoUsuario {
   logout
   refresh
   profile_update
+  colegio_create
+  colegio_update
+  colegio_deactivate
 
   @@schema("users")
 }

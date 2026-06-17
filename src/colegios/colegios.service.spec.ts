@@ -70,7 +70,7 @@ describe('ColegiosService', () => {
       prismaService.colegio.findUnique.mockResolvedValue(null);
       prismaService.user.findUnique.mockResolvedValue(null);
       supabaseService.createUserWithPasswordAndMetadata.mockResolvedValue({ id: 'supabase-user-id' });
-      prismaService.colegio.create.mockResolvedValue({ id: 'colegio-id', ...createDto });
+      prismaService.colegio.create.mockResolvedValue({ id: 'colegio-id', nombre: 'Colegio Test', rut: '76.543.210-K', plan: 'basic' });
       prismaService.user.create.mockResolvedValue({
         id: 'user-id',
         email: createDto.adminEmail,
@@ -78,11 +78,19 @@ describe('ColegiosService', () => {
         role: 'ADMIN',
       });
 
-      const result = await service.create(createDto);
+      const result = await service.create(createDto, 'superadmin-id', '127.0.0.1');
 
       expect(result).toHaveProperty('colegio');
       expect(result).toHaveProperty('admin');
       expect(result.admin.email).toBe(createDto.adminEmail);
+      expect(auditService.registrarEvento).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tipoEvento: 'colegio_create',
+          userId: 'superadmin-id',
+          ipOrigen: '127.0.0.1',
+          resultado: 'success',
+        }),
+      );
     });
 
     it('should throw ConflictException if email already exists', async () => {
@@ -96,6 +104,23 @@ describe('ColegiosService', () => {
       prismaService.user.findUnique.mockResolvedValue({ id: 'existing' });
 
       await expect(service.create(createDto)).rejects.toThrow(ConflictException);
+    });
+
+    it('should audit failure when supabase user creation fails', async () => {
+      prismaService.colegio.findUnique.mockResolvedValue(null);
+      prismaService.user.findUnique.mockResolvedValue(null);
+      supabaseService.createUserWithPasswordAndMetadata.mockRejectedValue(new Error('Supabase error'));
+
+      await expect(service.create(createDto, 'superadmin-id', '127.0.0.1')).rejects.toThrow(ConflictException);
+
+      expect(auditService.registrarEvento).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tipoEvento: 'colegio_create',
+          userId: 'superadmin-id',
+          ipOrigen: '127.0.0.1',
+          resultado: 'failure',
+        }),
+      );
     });
   });
 
@@ -131,24 +156,40 @@ describe('ColegiosService', () => {
   });
 
   describe('update', () => {
-    it('should update a colegio', async () => {
-      prismaService.colegio.findUnique.mockResolvedValue({ id: 'colegio-id' });
-      prismaService.colegio.update.mockResolvedValue({ id: 'colegio-id', nombre: 'Updated' });
+    it('should update a colegio and audit the change', async () => {
+      prismaService.colegio.findUnique.mockResolvedValue({ id: 'colegio-id', nombre: 'Old Name', plan: 'basic', activo: true });
+      prismaService.colegio.update.mockResolvedValue({ id: 'colegio-id', nombre: 'Updated', plan: 'premium', activo: true });
 
-      const result = await service.update('colegio-id', { nombre: 'Updated' });
+      const result = await service.update('colegio-id', { nombre: 'Updated', plan: 'premium' }, 'superadmin-id', '127.0.0.1');
 
       expect(result.nombre).toBe('Updated');
+      expect(auditService.registrarEvento).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tipoEvento: 'colegio_update',
+          userId: 'superadmin-id',
+          ipOrigen: '127.0.0.1',
+          resultado: 'success',
+        }),
+      );
     });
   });
 
   describe('deactivate', () => {
-    it('should deactivate a colegio', async () => {
-      prismaService.colegio.findUnique.mockResolvedValue({ id: 'colegio-id' });
+    it('should deactivate a colegio and audit the action', async () => {
+      prismaService.colegio.findUnique.mockResolvedValue({ id: 'colegio-id', nombre: 'Test Colegio', rut: '12.345.678-9', activo: true });
       prismaService.colegio.update.mockResolvedValue({ id: 'colegio-id', activo: false });
 
-      const result = await service.deactivate('colegio-id');
+      const result = await service.deactivate('colegio-id', 'superadmin-id', '127.0.0.1');
 
       expect(result.activo).toBe(false);
+      expect(auditService.registrarEvento).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tipoEvento: 'colegio_deactivate',
+          userId: 'superadmin-id',
+          ipOrigen: '127.0.0.1',
+          resultado: 'success',
+        }),
+      );
     });
   });
 

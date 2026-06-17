@@ -7,6 +7,12 @@ describe('ColegiosController', () => {
   let controller: ColegiosController;
   let service: jest.Mocked<ColegiosService>;
 
+  const mockRequest = {
+    superAdminUser: { id: 'superadmin-id', email: 'super@test.cl', nombreCompleto: 'Super Admin' },
+    ip: '127.0.0.1',
+    socket: { remoteAddress: '127.0.0.1' },
+  } as any;
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       controllers: [ColegiosController],
@@ -38,7 +44,7 @@ describe('ColegiosController', () => {
   });
 
   describe('create', () => {
-    it('should call service.create with dto', async () => {
+    it('should call service.create with dto and request info', async () => {
       const dto = {
         nombre: 'Test',
         direccion: 'Calle 123',
@@ -50,9 +56,9 @@ describe('ColegiosController', () => {
       };
       service.create.mockResolvedValue({ colegio: { id: '1' }, admin: { id: '2' } } as any);
 
-      const result = await controller.create(dto as any);
+      const result = await controller.create(dto as any, mockRequest);
 
-      expect(service.create).toHaveBeenCalledWith(dto);
+      expect(service.create).toHaveBeenCalledWith(dto, 'superadmin-id', '127.0.0.1');
       expect(result).toHaveProperty('colegio');
     });
   });
@@ -81,24 +87,24 @@ describe('ColegiosController', () => {
   });
 
   describe('update', () => {
-    it('should call service.update with id and dto', async () => {
+    it('should call service.update with id, dto and request info', async () => {
       const dto = { nombre: 'Updated' };
       service.update.mockResolvedValue({ id: 'colegio-id', nombre: 'Updated' } as any);
 
-      const result = await controller.update('colegio-id', dto);
+      const result = await controller.update('colegio-id', dto, mockRequest);
 
-      expect(service.update).toHaveBeenCalledWith('colegio-id', dto);
+      expect(service.update).toHaveBeenCalledWith('colegio-id', dto, 'superadmin-id', '127.0.0.1');
       expect(result.nombre).toBe('Updated');
     });
   });
 
   describe('deactivate', () => {
-    it('should call service.deactivate with id', async () => {
+    it('should call service.deactivate with id and request info', async () => {
       service.deactivate.mockResolvedValue({ id: 'colegio-id', activo: false } as any);
 
-      const result = await controller.deactivate('colegio-id');
+      const result = await controller.deactivate('colegio-id', mockRequest);
 
-      expect(service.deactivate).toHaveBeenCalledWith('colegio-id');
+      expect(service.deactivate).toHaveBeenCalledWith('colegio-id', 'superadmin-id', '127.0.0.1');
       expect(result.activo).toBe(false);
     });
   });

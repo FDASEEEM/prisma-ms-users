@@ -14,7 +14,7 @@ export class ColegiosService {
     private readonly auditService: AuditService,
   ) {}
 
-  async create(dto: CreateColegioDto) {
+  async create(dto: CreateColegioDto, superAdminUserId?: string, ipOrigen?: string) {
     const existingEmail = await this.prismaService.colegio.findUnique({ where: { email: dto.email } });
     if (existingEmail) {
       throw new ConflictException("Ya existe un colegio con ese email.");
@@ -42,6 +42,13 @@ export class ColegiosService {
       }
       supabaseUserId = supabaseResult.id;
     } catch (error) {
+      await this.auditService.registrarEvento({
+        tipoEvento: "colegio_create",
+        userId: superAdminUserId ?? null,
+        ipOrigen,
+        resultado: "failure",
+        mensaje: `Error creando colegio '${dto.nombre}': ${error instanceof Error ? error.message : "Error desconocido"}`,
+      });
       throw new ConflictException(
         `Error creando el usuario admin: ${error instanceof Error ? error.message : "Error desconocido"}`,
       );
@@ -75,10 +82,11 @@ export class ColegiosService {
       });
 
       await this.auditService.registrarEvento({
-        tipoEvento: "register",
-        userId: adminUser.id,
+        tipoEvento: "colegio_create",
+        userId: superAdminUserId ?? null,
+        ipOrigen,
         resultado: "success",
-        mensaje: `Colegio '${colegio.nombre}' creado con admin '${dto.adminNombre}'.`,
+        mensaje: `Colegio '${colegio.nombre}' (RUT: ${colegio.rut}) creado con admin '${dto.adminNombre}' (${dto.adminEmail}). Plan: ${colegio.plan}.`,
       });
 
       return {
@@ -94,6 +102,13 @@ export class ColegiosService {
       if (supabaseUserId) {
         await this.supabaseService.deleteUser(supabaseUserId);
       }
+      await this.auditService.registrarEvento({
+        tipoEvento: "colegio_create",
+        userId: superAdminUserId ?? null,
+        ipOrigen,
+        resultado: "failure",
+        mensaje: `Error creando colegio '${dto.nombre}': ${error instanceof Error ? error.message : "Error desconocido"}`,
+      });
       throw error;
     }
   }
@@ -152,10 +167,10 @@ export class ColegiosService {
     return colegio;
   }
 
-  async update(id: string, dto: UpdateColegioDto) {
-    await this.findOne(id);
+  async update(id: string, dto: UpdateColegioDto, superAdminUserId?: string, ipOrigen?: string) {
+    const colegio = await this.findOne(id);
 
-    return this.prismaService.colegio.update({
+    const updated = await this.prismaService.colegio.update({
       where: { id },
       data: {
         nombre: dto.nombre,
@@ -166,15 +181,40 @@ export class ColegiosService {
         activo: dto.activo,
       },
     });
+
+    const cambios: string[] = [];
+    if (dto.nombre && dto.nombre !== colegio.nombre) cambios.push(`nombre: '${colegio.nombre}' → '${dto.nombre}'`);
+    if (dto.plan && dto.plan !== colegio.plan) cambios.push(`plan: '${colegio.plan}' → '${dto.plan}'`);
+    if (dto.activo !== undefined && dto.activo !== colegio.activo) cambios.push(`activo: ${colegio.activo} → ${dto.activo}`);
+
+    await this.auditService.registrarEvento({
+      tipoEvento: "colegio_update",
+      userId: superAdminUserId ?? null,
+      ipOrigen,
+      resultado: "success",
+      mensaje: `Colegio '${updated.nombre}' (ID: ${id}) actualizado. Cambios: ${cambios.length > 0 ? cambios.join(", ") : "sin cambios"}.`,
+    });
+
+    return updated;
   }
 
-  async deactivate(id: string) {
-    await this.findOne(id);
+  async deactivate(id: string, superAdminUserId?: string, ipOrigen?: string) {
+    const colegio = await this.findOne(id);
 
-    return this.prismaService.colegio.update({
+    const updated = await this.prismaService.colegio.update({
       where: { id },
       data: { activo: false },
     });
+
+    await this.auditService.registrarEvento({
+      tipoEvento: "colegio_deactivate",
+      userId: superAdminUserId ?? null,
+      ipOrigen,
+      resultado: "success",
+      mensaje: `Colegio '${colegio.nombre}' (ID: ${id}, RUT: ${colegio.rut}) desactivado por SUPERADMIN.`,
+    });
+
+    return updated;
   }
 
   async getStats(id: string) {

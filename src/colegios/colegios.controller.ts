@@ -7,14 +7,18 @@ import {
   Patch,
   Post,
   Query,
+  Req,
   UseGuards,
 } from "@nestjs/common";
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
+import { Request } from "express";
 import { SuperAdminRoleGuard } from "./guards/superadmin-role.guard";
 import { ColegiosService } from "./colegios.service";
 import { CreateColegioDto } from "./dto/create-colegio.dto";
 import { UpdateColegioDto } from "./dto/update-colegio.dto";
 import { PaginationDto } from "./dto/pagination.dto";
+
+type SuperAdminUser = { id: string; email?: string; nombreCompleto?: string };
 
 @ApiTags("superadmin")
 @ApiBearerAuth()
@@ -37,20 +41,33 @@ export class ColegiosController {
 
   @Post()
   @ApiOperation({ summary: "Crear colegio con su primer admin" })
-  create(@Body() dto: CreateColegioDto) {
-    return this.colegiosService.create(dto);
+  create(@Body() dto: CreateColegioDto, @Req() request: Request & { superAdminUser?: SuperAdminUser }) {
+    return this.colegiosService.create(
+      dto,
+      request.superAdminUser?.id,
+      request.ip ?? request.socket?.remoteAddress,
+    );
   }
 
   @Patch(":id")
   @ApiOperation({ summary: "Actualizar colegio" })
-  update(@Param("id") id: string, @Body() dto: UpdateColegioDto) {
-    return this.colegiosService.update(id, dto);
+  update(@Param("id") id: string, @Body() dto: UpdateColegioDto, @Req() request: Request & { superAdminUser?: SuperAdminUser }) {
+    return this.colegiosService.update(
+      id,
+      dto,
+      request.superAdminUser?.id,
+      request.ip ?? request.socket?.remoteAddress,
+    );
   }
 
   @Delete(":id")
   @ApiOperation({ summary: "Desactivar colegio (soft delete)" })
-  deactivate(@Param("id") id: string) {
-    return this.colegiosService.deactivate(id);
+  deactivate(@Param("id") id: string, @Req() request: Request & { superAdminUser?: SuperAdminUser }) {
+    return this.colegiosService.deactivate(
+      id,
+      request.superAdminUser?.id,
+      request.ip ?? request.socket?.remoteAddress,
+    );
   }
 
   @Get(":id/stats")
