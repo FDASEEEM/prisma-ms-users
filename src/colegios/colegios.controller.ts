@@ -91,4 +91,11 @@ export class ColegiosController {
   getProfessors(@Param("id") id: string, @Query() query: ProfessorsPaginationDto) {
     return this.colegiosService.getProfessors(id, query);
   }
+
+  @Get(":id/admins")
+  @ApiOperation({ summary: "Listar ADMINs del colegio" })
+  @RateLimit({ limit: 100, windowMs: 60000 })
+  getAdmins(@Param("id") id: string) {
+    return this.colegiosService.getAdmins(id);
+  }
 }
