@@ -30,6 +30,7 @@ describe('ColegiosService', () => {
 
     supabaseService = {
       createUserWithPasswordAndMetadata: jest.fn(),
+      updateUserAppMetadata: jest.fn(),
       deleteUser: jest.fn(),
     };
 
@@ -83,6 +84,10 @@ describe('ColegiosService', () => {
       expect(result).toHaveProperty('colegio');
       expect(result).toHaveProperty('admin');
       expect(result.admin.email).toBe(createDto.adminEmail);
+      expect(supabaseService.updateUserAppMetadata).toHaveBeenCalledWith(
+        'supabase-user-id',
+        { role: 'ADMIN', colegioId: 'colegio-id' },
+      );
       expect(auditService.registrarEvento).toHaveBeenCalledWith(
         expect.objectContaining({
           tipoEvento: 'colegio_create',

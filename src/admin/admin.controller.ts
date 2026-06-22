@@ -98,6 +98,11 @@ export class AdminController {
         nombreCompleto: body.nombreCompleto,
         colegioId: colegioId ?? null,
       },
+      // app_metadata: fuente segura del tenant leida por perfil-alumno/docs.
+      {
+        role: body.role ?? "TEACHER",
+        colegioId: colegioId ?? null,
+      },
     );
     if (!supabaseResult?.id) {
       return { ok: false, message: "Error creando usuario en Supabase" };
@@ -164,8 +169,18 @@ export class AdminController {
         role: true,
         nombreCompleto: true,
         colegioId: true,
+        supabaseUserId: true,
       },
     });
+
+    // Propagar rol/colegio al app_metadata de Supabase para que el proximo
+    // token del usuario lleve el tenant correcto (perfil-alumno/docs lo leen).
+    if (user.supabaseUserId) {
+      await this.supabaseService.updateUserAppMetadata(user.supabaseUserId, {
+        role: user.role,
+        colegioId: user.colegioId ?? null,
+      });
+    }
 
     if (previous.role === "ADMIN" || user.role === "ADMIN") {
       await this.auditService.registrarEvento({

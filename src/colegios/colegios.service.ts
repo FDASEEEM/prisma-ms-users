@@ -81,6 +81,13 @@ export class ColegiosService {
         },
       });
 
+      // El usuario admin se creo en Supabase antes de existir el colegio;
+      // ahora propagamos el tenant a app_metadata (lo leen perfil-alumno/docs).
+      await this.supabaseService.updateUserAppMetadata(supabaseUserId, {
+        role: "ADMIN",
+        colegioId: colegio.id,
+      });
+
       await this.auditService.registrarEvento({
         tipoEvento: "colegio_create",
         userId: superAdminUserId ?? null,

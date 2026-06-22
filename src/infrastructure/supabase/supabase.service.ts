@@ -24,6 +24,7 @@ export class SupabaseService {
   async register(
     email: string,
     password: string,
+    appMetadata?: Record<string, unknown>,
   ): Promise<SupabaseSessionResult> {
     const { adminClient, publicClient } = this.getClients();
 
@@ -31,6 +32,9 @@ export class SupabaseService {
       email,
       password,
       email_confirm: true,
+      // Sembrar el tenant en app_metadata antes del sign-in para que el token
+      // emitido ya lo lleve (server-only; lo leen perfil-alumno/docs del JWT).
+      ...(appMetadata ? { app_metadata: appMetadata } : {}),
     });
 
     if (createdUser.error || !createdUser.data.user) {
@@ -176,6 +180,7 @@ export class SupabaseService {
     email: string,
     password: string,
     userMetadata?: Record<string, unknown>,
+    appMetadata?: Record<string, unknown>,
   ): Promise<{ id: string }> {
     const { adminClient } = this.getClients();
 
@@ -184,6 +189,9 @@ export class SupabaseService {
       password,
       email_confirm: true,
       user_metadata: userMetadata,
+      // app_metadata es server-only (solo con service-role): es la fuente
+      // segura del tenant que los microservicios leen del JWT (perfil, docs).
+      ...(appMetadata ? { app_metadata: appMetadata } : {}),
     });
 
     if (createdUser.error || !createdUser.data.user) {
@@ -193,6 +201,31 @@ export class SupabaseService {
     }
 
     return { id: createdUser.data.user.id };
+  }
+
+  /**
+   * Sincroniza el app_metadata (colegioId, role) del usuario en Supabase.
+   *
+   * app_metadata es server-only (el usuario NO puede editarlo desde el SDK,
+   * a diferencia de user_metadata): por eso es la fuente segura del tenant
+   * para los microservicios que validan el JWT por JWKS (perfil-alumno, docs).
+   * El nuevo valor solo viaja en tokens emitidos tras un nuevo login/refresh.
+   */
+  async updateUserAppMetadata(
+    supabaseUserId: string,
+    appMetadata: Record<string, unknown>,
+  ): Promise<void> {
+    const { adminClient } = this.getClients();
+
+    const result = await adminClient.auth.admin.updateUserById(supabaseUserId, {
+      app_metadata: appMetadata,
+    });
+
+    if (result.error || !result.data.user) {
+      throw new InternalServerErrorException(
+        result.error?.message ?? "Could not update user app_metadata.",
+      );
+    }
   }
 
   private mapSession(
