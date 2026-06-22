@@ -31,7 +31,10 @@ export class AuthService {
     let session: SupabaseSessionResult | null = null;
 
     try {
-      session = await this.supabaseService.register(dto.email, dto.password);
+      session = await this.supabaseService.register(dto.email, dto.password, {
+        role: "TEACHER",
+        colegioId: dto.colegioId ?? null,
+      });
 
       const profile = await this.usersService.createProfile({
         supabaseUserId: session.user.id,

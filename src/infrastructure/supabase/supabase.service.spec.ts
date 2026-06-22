@@ -7,6 +7,7 @@ const signOut = jest.fn();
 const getUser = jest.fn();
 const createUser = jest.fn();
 const deleteUser = jest.fn();
+const updateUserById = jest.fn();
 
 jest.mock("@supabase/supabase-js", () => ({
   createClient: jest.fn(() => ({
@@ -14,6 +15,7 @@ jest.mock("@supabase/supabase-js", () => ({
       admin: {
         createUser,
         deleteUser,
+        updateUserById,
       },
       signInWithPassword,
       refreshSession,
@@ -321,6 +323,75 @@ describe("SupabaseService", () => {
       await expect(service.deleteUser("supabase-1")).rejects.toBeInstanceOf(
         InternalServerErrorException,
       );
+    });
+  });
+
+  describe("createUserWithPasswordAndMetadata", () => {
+    it("forwards app_metadata to Supabase createUser", async () => {
+      createUser.mockResolvedValue({
+        error: null,
+        data: { user: { id: "supabase-1" } },
+      });
+
+      await service.createUserWithPasswordAndMetadata(
+        "admin@correo.com",
+        "Password123!",
+        { role: "ADMIN", nombreCompleto: "Admin" },
+        { role: "ADMIN", colegioId: "colegio-uuid" },
+      );
+
+      expect(createUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: "admin@correo.com",
+          user_metadata: { role: "ADMIN", nombreCompleto: "Admin" },
+          app_metadata: { role: "ADMIN", colegioId: "colegio-uuid" },
+        }),
+      );
+    });
+
+    it("omits app_metadata when not provided", async () => {
+      createUser.mockResolvedValue({
+        error: null,
+        data: { user: { id: "supabase-1" } },
+      });
+
+      await service.createUserWithPasswordAndMetadata(
+        "admin@correo.com",
+        "Password123!",
+      );
+
+      expect(createUser).toHaveBeenCalledWith(
+        expect.not.objectContaining({ app_metadata: expect.anything() }),
+      );
+    });
+  });
+
+  describe("updateUserAppMetadata", () => {
+    it("calls updateUserById with the app_metadata", async () => {
+      updateUserById.mockResolvedValue({
+        error: null,
+        data: { user: { id: "supabase-1" } },
+      });
+
+      await service.updateUserAppMetadata("supabase-1", {
+        role: "TEACHER",
+        colegioId: "colegio-uuid",
+      });
+
+      expect(updateUserById).toHaveBeenCalledWith("supabase-1", {
+        app_metadata: { role: "TEACHER", colegioId: "colegio-uuid" },
+      });
+    });
+
+    it("throws InternalServerErrorException on error", async () => {
+      updateUserById.mockResolvedValue({
+        error: { message: "User not found" },
+        data: { user: null },
+      });
+
+      await expect(
+        service.updateUserAppMetadata("supabase-1", { colegioId: "x" }),
+      ).rejects.toBeInstanceOf(InternalServerErrorException);
     });
   });
 
