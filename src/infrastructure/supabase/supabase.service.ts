@@ -5,6 +5,7 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { createClient, SupabaseClient, User } from "@supabase/supabase-js";
+import { createHash, randomBytes } from "crypto";
 
 export interface SupabaseSessionResult {
   accessToken: string;
@@ -14,10 +15,16 @@ export interface SupabaseSessionResult {
   user: User;
 }
 
+const OAUTH_STATE_TTL_MS = 10 * 60 * 1000;
+
 @Injectable()
 export class SupabaseService {
   private adminClient?: SupabaseClient;
   private publicClient?: SupabaseClient;
+  private readonly oauthChallenges = new Map<
+    string,
+    { codeVerifier: string; expiresAt: number }
+  >();
 
   constructor(private readonly configService: ConfigService) {}
 
@@ -225,6 +232,104 @@ export class SupabaseService {
       throw new InternalServerErrorException(
         result.error?.message ?? "Could not update user app_metadata.",
       );
+    }
+  }
+
+  /**
+   * Genera la URL de autorización de Google (flujo OAuth con PKCE).
+   *
+   * El `state` se usa como clave para guardar el `code_verifier` en memoria
+   * (Map con TTL): cuando el browser vuelve al callback con `?code=...&state=...`,
+   * exchangeGoogleCode() recupera el verifier por ese state.
+   */
+  async getGoogleAuthUrl(
+    redirectTo: string,
+  ): Promise<{ url: string; state: string }> {
+    const { supabaseUrl } = this.getRequiredConfig();
+    this.cleanupOauthChallenges();
+
+    const state = randomBytes(16).toString("base64url");
+    const codeVerifier = randomBytes(32).toString("base64url");
+    const codeChallenge = createHash("sha256")
+      .update(codeVerifier)
+      .digest("base64url");
+
+    this.oauthChallenges.set(state, {
+      codeVerifier,
+      expiresAt: Date.now() + OAUTH_STATE_TTL_MS,
+    });
+
+    const params = new URLSearchParams({
+      provider: "google",
+      redirect_to: redirectTo,
+      code_challenge: codeChallenge,
+      code_challenge_method: "S256",
+      state,
+    });
+
+    return {
+      url: `${supabaseUrl}/auth/v1/authorize?${params.toString()}`,
+      state,
+    };
+  }
+
+  /**
+   * Intercambia el `code` devuelto por Supabase (tras el login de Google) por
+   * una sesión, usando el `code_verifier` del PKCE guardado para ese `state`.
+   */
+  async exchangeGoogleCode(
+    code: string,
+    state: string,
+  ): Promise<SupabaseSessionResult> {
+    const { supabaseUrl, anonKey } = this.getRequiredConfig();
+
+    const challenge = this.oauthChallenges.get(state);
+    this.oauthChallenges.delete(state);
+
+    if (!challenge || challenge.expiresAt < Date.now()) {
+      throw new UnauthorizedException(
+        "Invalid or expired OAuth state.",
+      );
+    }
+
+    const response = await fetch(`${supabaseUrl}/auth/v1/token?grant_type=pkce`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: anonKey,
+      },
+      body: JSON.stringify({
+        grant_type: "pkce",
+        code,
+        code_verifier: challenge.codeVerifier,
+      }),
+    });
+
+    const data = (await response.json()) as Record<string, any>;
+
+    if (!response.ok || !data.access_token || !data.user) {
+      throw new UnauthorizedException(
+        data.error_description ??
+          data.error ??
+          "Could not exchange Google OAuth code.",
+      );
+    }
+
+    return this.mapSession(
+      data.access_token,
+      data.refresh_token,
+      data.token_type ?? "bearer",
+      data.expires_in ?? 3600,
+      data.user,
+    );
+  }
+
+  private cleanupOauthChallenges(): void {
+    const now = Date.now();
+    for (const [state, entry] of this.oauthChallenges) {
+      if (entry.expiresAt < now) {
+        this.oauthChallenges.delete(state);
+      }
     }
   }
 

@@ -6,7 +6,6 @@ import {
   IsOptional,
   IsString,
   IsUUID,
-  MinLength,
 } from "class-validator";
 import { USER_ROLES, type UserRole } from "../user-role";
 
@@ -19,10 +18,10 @@ export class CreateUserProfileDto {
   @IsEmail()
   email!: string;
 
-  @ApiProperty({ example: "12.345.678-9" })
+  @ApiPropertyOptional({ example: "12.345.678-9" })
+  @IsOptional()
   @IsString()
-  @MinLength(7)
-  rut!: string;
+  rut?: string;
 
   @ApiProperty({ example: "Juan Pérez" })
   @IsString()

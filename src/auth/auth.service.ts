@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from "@nestjs/common";
 import { User } from "@prisma/client";
 import { AuditService } from "../infrastructure/audit/audit.service";
 import {
@@ -145,6 +149,47 @@ export class AuthService {
     }
   }
 
+  async getGoogleAuthUrl(redirectTo?: string) {
+    if (!redirectTo || redirectTo.length === 0) {
+      throw new BadRequestException("redirectTo is required.");
+    }
+
+    return this.supabaseService.getGoogleAuthUrl(redirectTo);
+  }
+
+  async exchangeGoogleCode(code: string, state: string, ipOrigen?: string) {
+    try {
+      const session = await this.supabaseService.exchangeGoogleCode(
+        code,
+        state,
+      );
+      const profile = await this.provisionGoogleUser(session.user);
+
+      await this.auditService.registrarEvento({
+        tipoEvento: "login",
+        userId: profile.id,
+        ipOrigen,
+        resultado: "success",
+        mensaje: "Inicio de sesión con Google exitoso.",
+      });
+
+      return this.mapSession(session, profile);
+    } catch (error) {
+      await this.auditService.registrarEvento({
+        tipoEvento: "login",
+        userId: null,
+        ipOrigen,
+        resultado: "failure",
+        mensaje:
+          error instanceof Error
+            ? error.message
+            : "Error inesperado al iniciar sesión con Google.",
+      });
+
+      throw error;
+    }
+  }
+
   async logout(authorization?: string, ipOrigen?: string) {
     const accessToken = this.getBearerToken(authorization);
     const supabaseUser = await this.supabaseService.getUser(accessToken);
@@ -215,6 +260,53 @@ export class AuthService {
     }
 
     return this.usersService.updateProfile(supabaseUserId, dto, ipOrigen);
+  }
+
+  private async provisionGoogleUser(supabaseUser: {
+    id: string;
+    email?: string;
+    user_metadata?: Record<string, any>;
+  }): Promise<User> {
+    const email = supabaseUser.email ?? "";
+
+    const existing = await this.usersService
+      .findBySupabaseUserId(supabaseUser.id)
+      .catch((error) => {
+        if (error instanceof NotFoundException) {
+          return null;
+        }
+        throw error;
+      });
+
+    if (existing) {
+      return existing;
+    }
+
+    const byEmail = await this.usersService.findByEmail(email);
+
+    if (byEmail) {
+      return this.usersService.linkSupabaseUser(byEmail.id, supabaseUser.id);
+    }
+
+    const nombreCompleto =
+      (supabaseUser.user_metadata?.full_name as string) ??
+      (supabaseUser.user_metadata?.name as string) ??
+      email;
+
+    const profile = await this.usersService.createProfile({
+      supabaseUserId: supabaseUser.id,
+      email,
+      nombreCompleto,
+      role: "TEACHER",
+      active: true,
+    });
+
+    await this.supabaseService.updateUserAppMetadata(supabaseUser.id, {
+      role: "TEACHER",
+      colegioId: null,
+    });
+
+    return profile;
   }
 
   private getBearerToken(authorization?: string): string {

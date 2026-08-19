@@ -395,6 +395,103 @@ describe("SupabaseService", () => {
     });
   });
 
+  describe("getGoogleAuthUrl", () => {
+    it("returns a Google authorize URL with PKCE params and a state", async () => {
+      const result = await service.getGoogleAuthUrl(
+        "http://localhost:3010/api/auth/google/callback",
+      );
+
+      expect(result.url).toMatch(
+        /^https:\/\/example\.supabase\.co\/auth\/v1\/authorize\?provider=google/,
+      );
+      expect(result.url).toContain("code_challenge=");
+      expect(result.url).toContain("code_challenge_method=S256");
+      expect(result.url).toContain(`state=${result.state}`);
+      expect(result.state.length).toBeGreaterThan(0);
+    });
+
+    it("throws when SUPABASE_URL is not configured", async () => {
+      const config = {
+        get: jest.fn((key: string) => {
+          const values: Record<string, string> = {
+            SUPABASE_ANON_KEY: "anon-key",
+            SUPABASE_SERVICE_ROLE_KEY: "service-role-key",
+          };
+          return values[key];
+        }),
+      } as unknown as ConfigService;
+
+      const svc = new SupabaseService(config);
+      await expect(
+        svc.getGoogleAuthUrl("http://localhost:3010/cb"),
+      ).rejects.toThrow(
+        "Supabase environment variables are required for auth operations.",
+      );
+    });
+  });
+
+  describe("exchangeGoogleCode", () => {
+    it("exchanges the code for a session using the stored code verifier", async () => {
+      const { state } = await service.getGoogleAuthUrl(
+        "http://localhost:3010/api/auth/google/callback",
+      );
+
+      const fetchMock = jest.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          access_token: "access",
+          refresh_token: "refresh",
+          token_type: "bearer",
+          expires_in: 3600,
+          user: { id: "google-1", email: "g@test.cl" },
+        }),
+      });
+      (global as any).fetch = fetchMock;
+
+      await expect(
+        service.exchangeGoogleCode("the-code", state),
+      ).resolves.toEqual({
+        accessToken: "access",
+        refreshToken: "refresh",
+        tokenType: "bearer",
+        expiresIn: 3600,
+        user: { id: "google-1", email: "g@test.cl" },
+      });
+
+      expect(fetchMock).toHaveBeenCalledWith(
+        "https://example.supabase.co/auth/v1/token?grant_type=pkce",
+        expect.objectContaining({
+          method: "POST",
+          body: expect.stringContaining('"code":"the-code"'),
+        }),
+      );
+    });
+
+    it("throws UnauthorizedException for an unknown or expired state", async () => {
+      await expect(
+        service.exchangeGoogleCode("the-code", "unknown-state"),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+
+    it("throws UnauthorizedException when Supabase token endpoint returns an error", async () => {
+      const { state } = await service.getGoogleAuthUrl(
+        "http://localhost:3010/api/auth/google/callback",
+      );
+
+      (global as any).fetch = jest.fn().mockResolvedValue({
+        ok: false,
+        json: async () => ({
+          error: "invalid_grant",
+          error_description: "Invalid code",
+        }),
+      });
+
+      await expect(
+        service.exchangeGoogleCode("bad-code", state),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+    });
+  });
+
   describe("getRequiredConfig", () => {
     it("throws Error when SUPABASE_URL is missing", () => {
       const config = {

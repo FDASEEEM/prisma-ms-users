@@ -21,6 +21,8 @@ import { AuthService } from "./auth.service";
 import { LoginDto } from "./dto/login.dto";
 import { RefreshTokenDto } from "./dto/refresh-token.dto";
 import { RegisterDto } from "./dto/register.dto";
+import { GoogleUrlDto } from "./dto/google-url.dto";
+import { GoogleCallbackDto } from "./dto/google-callback.dto";
 import { SupabaseAuthGuard } from "./guards/supabase-auth.guard";
 import { UpdateMeDto } from "./dto/update-me.dto";
 
@@ -56,6 +58,32 @@ export class AuthController {
   @ApiResponse({ status: 200, description: "Sesión renovada correctamente." })
   refresh(@Req() request: Request, @Body() dto: RefreshTokenDto) {
     return this.authService.refresh(dto, request.ip);
+  }
+
+  @Post("google/url")
+  @HttpCode(200)
+  @ApiOperation({ summary: "Obtener URL de autorización de Google (PKCE)" })
+  @ApiBody({ type: GoogleUrlDto })
+  @ApiResponse({
+    status: 200,
+    description: "URL de Google para redirigir al navegador.",
+  })
+  googleUrl(@Body() dto: GoogleUrlDto) {
+    return this.authService.getGoogleAuthUrl(dto.redirectTo);
+  }
+
+  @Post("google/callback")
+  @HttpCode(200)
+  @ApiOperation({
+    summary: "Intercambiar code de Google por una sesión",
+  })
+  @ApiBody({ type: GoogleCallbackDto })
+  @ApiResponse({
+    status: 200,
+    description: "Sesión iniciada con Google correctamente.",
+  })
+  googleCallback(@Req() request: Request, @Body() dto: GoogleCallbackDto) {
+    return this.authService.exchangeGoogleCode(dto.code, dto.state, request.ip);
   }
 
   @UseGuards(SupabaseAuthGuard)

@@ -9,6 +9,9 @@ describe("AuthService", () => {
     logout: jest.fn(),
     deleteUser: jest.fn(),
     getUser: jest.fn(),
+    getGoogleAuthUrl: jest.fn(),
+    exchangeGoogleCode: jest.fn(),
+    updateUserAppMetadata: jest.fn(),
   } as any;
 
   const usersService = {
@@ -16,6 +19,7 @@ describe("AuthService", () => {
     findBySupabaseUserId: jest.fn(),
     findByEmail: jest.fn(),
     updateProfile: jest.fn(),
+    linkSupabaseUser: jest.fn(),
   } as any;
 
   const auditService = {
@@ -261,6 +265,134 @@ describe("AuthService", () => {
         resultado: "failure",
         mensaje: "Error inesperado al refrescar la sesión.",
       });
+    });
+  });
+
+  describe("getGoogleAuthUrl", () => {
+    it("throws BadRequestException when redirectTo is missing", async () => {
+      await expect(service.getGoogleAuthUrl()).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+      await expect(service.getGoogleAuthUrl("")).rejects.toBeInstanceOf(
+        BadRequestException,
+      );
+    });
+
+    it("delegates to supabaseService with the redirectTo", async () => {
+      supabaseService.getGoogleAuthUrl.mockResolvedValue({
+        url: "https://google.com/auth",
+        state: "pkce-state",
+      });
+
+      const result = await service.getGoogleAuthUrl(
+        "http://localhost:3010/api/auth/google/callback",
+      );
+
+      expect(supabaseService.getGoogleAuthUrl).toHaveBeenCalledWith(
+        "http://localhost:3010/api/auth/google/callback",
+      );
+      expect(result).toEqual({
+        url: "https://google.com/auth",
+        state: "pkce-state",
+      });
+    });
+  });
+
+  describe("exchangeGoogleCode", () => {
+    const session = {
+      accessToken: "access",
+      refreshToken: "refresh",
+      tokenType: "bearer",
+      expiresIn: 3600,
+      user: {
+        id: "google-1",
+        email: "g@test.cl",
+        user_metadata: { full_name: "Google User" },
+      },
+    };
+
+    it("provisions a new profile for a first-time Google user", async () => {
+      supabaseService.exchangeGoogleCode.mockResolvedValue(session);
+      usersService.findBySupabaseUserId.mockRejectedValue(
+        new NotFoundException("User profile not found."),
+      );
+      usersService.findByEmail.mockResolvedValue(null);
+      usersService.createProfile.mockResolvedValue({ id: "perfil-1" });
+      supabaseService.updateUserAppMetadata.mockResolvedValue(undefined);
+
+      await expect(
+        service.exchangeGoogleCode("code", "state", "127.0.0.1"),
+      ).resolves.toEqual({
+        access_token: "access",
+        refresh_token: "refresh",
+        token_type: "bearer",
+        expires_in: 3600,
+        user: { id: "perfil-1" },
+      });
+
+      expect(usersService.createProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          supabaseUserId: "google-1",
+          email: "g@test.cl",
+          nombreCompleto: "Google User",
+          role: "TEACHER",
+        }),
+      );
+      expect(supabaseService.updateUserAppMetadata).toHaveBeenCalledWith(
+        "google-1",
+        { role: "TEACHER", colegioId: null },
+      );
+      expect(auditService.registrarEvento).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tipoEvento: "login",
+          resultado: "success",
+        }),
+      );
+    });
+
+    it("reuses the profile when the supabase user already exists", async () => {
+      supabaseService.exchangeGoogleCode.mockResolvedValue(session);
+      usersService.findBySupabaseUserId.mockResolvedValue({ id: "perfil-1" });
+
+      await expect(
+        service.exchangeGoogleCode("code", "state"),
+      ).resolves.toEqual(expect.objectContaining({ user: { id: "perfil-1" } }));
+
+      expect(usersService.createProfile).not.toHaveBeenCalled();
+    });
+
+    it("links an existing profile by email when the supabase user is new", async () => {
+      supabaseService.exchangeGoogleCode.mockResolvedValue(session);
+      usersService.findBySupabaseUserId.mockRejectedValue(
+        new NotFoundException("User profile not found."),
+      );
+      usersService.findByEmail.mockResolvedValue({ id: "perfil-1" });
+      usersService.linkSupabaseUser.mockResolvedValue({ id: "perfil-1" });
+
+      await service.exchangeGoogleCode("code", "state");
+
+      expect(usersService.linkSupabaseUser).toHaveBeenCalledWith(
+        "perfil-1",
+        "google-1",
+      );
+    });
+
+    it("audits failure when the exchange throws", async () => {
+      supabaseService.exchangeGoogleCode.mockRejectedValue(
+        new UnauthorizedException("Invalid code"),
+      );
+
+      await expect(
+        service.exchangeGoogleCode("code", "state"),
+      ).rejects.toBeInstanceOf(UnauthorizedException);
+
+      expect(auditService.registrarEvento).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tipoEvento: "login",
+          resultado: "failure",
+          mensaje: "Invalid code",
+        }),
+      );
     });
   });
 
