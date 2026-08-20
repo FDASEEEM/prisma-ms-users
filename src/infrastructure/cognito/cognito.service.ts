@@ -38,17 +38,8 @@ export class CognitoService {
       this.configService.get<string>("COGNITO_DOMAIN") || "",
     );
 
-    const endpoint = this.configService.get<string>("COGNITO_ENDPOINT");
-    this.client = new CognitoIdentityProviderClient({
-      region: this.region,
-      ...(endpoint ? { endpoint } : {}),
-      ...(endpoint
-        ? { credentials: { accessKeyId: "mock", secretAccessKey: "mock" } }
-        : {}),
-    });
-    this.issuer =
-      this.configService.get<string>("COGNITO_ISSUER") ||
-      `https://cognito-idp.${this.region}.amazonaws.com/${this.userPoolId}`;
+    this.client = new CognitoIdentityProviderClient({ region: this.region });
+    this.issuer = `https://cognito-idp.${this.region}.amazonaws.com/${this.userPoolId}`;
   }
 
   private normalizeDomain(domain: string): string {
@@ -68,7 +59,7 @@ export class CognitoService {
       response_type: "code",
       client_id: this.clientId,
       redirect_uri: redirectTo,
-      scope: "openid email profile",
+      scope: "openid email",
       identity_provider: "Google",
       state,
     });
