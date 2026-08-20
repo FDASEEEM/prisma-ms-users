@@ -273,7 +273,7 @@ export class AuthService {
       throw new BadRequestException("Authenticated user not found.");
     }
 
-    return this.usersService.findById(userId);
+    return this.usersService.findBySupabaseUserId(userId);
   }
 
   async updateMe(

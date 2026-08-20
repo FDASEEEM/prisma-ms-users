@@ -26,6 +26,7 @@ export class CognitoService {
   private readonly userPoolId: string;
   private readonly clientId: string;
   private readonly region: string;
+  private readonly domain: string;
   private jwks?: jose.RemoteJWKSet;
   private readonly issuer: string;
 
@@ -33,9 +34,27 @@ export class CognitoService {
     this.region = this.configService.get<string>("COGNITO_REGION") || "us-east-1";
     this.userPoolId = this.configService.get<string>("COGNITO_USER_POOL_ID") || "";
     this.clientId = this.configService.get<string>("COGNITO_CLIENT_ID") || "";
+    this.domain = this.normalizeDomain(
+      this.configService.get<string>("COGNITO_DOMAIN") || "",
+    );
 
-    this.client = new CognitoIdentityProviderClient({ region: this.region });
-    this.issuer = `https://cognito-idp.${this.region}.amazonaws.com/${this.userPoolId}`;
+    const endpoint = this.configService.get<string>("COGNITO_ENDPOINT");
+    this.client = new CognitoIdentityProviderClient({
+      region: this.region,
+      ...(endpoint ? { endpoint } : {}),
+      ...(endpoint
+        ? { credentials: { accessKeyId: "mock", secretAccessKey: "mock" } }
+        : {}),
+    });
+    this.issuer =
+      this.configService.get<string>("COGNITO_ISSUER") ||
+      `https://cognito-idp.${this.region}.amazonaws.com/${this.userPoolId}`;
+  }
+
+  private normalizeDomain(domain: string): string {
+    if (!domain) return "";
+    const trimmed = domain.replace(/\/+$/, "");
+    return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
   }
 
   // ─── Google OAuth via Cognito Hosted UI ────────────────────────
@@ -55,7 +74,7 @@ export class CognitoService {
     });
 
     return {
-      url: `${this.issuer}/oauth2/authorize?${params.toString()}`,
+      url: `${this.domain}/oauth2/authorize?${params.toString()}`,
       state,
     };
   }
@@ -70,21 +89,8 @@ export class CognitoService {
       Buffer.from(state, "base64url").toString(),
     ).redirectTo;
 
-    const command = new AdminInitiateAuthCommand({
-      UserPoolId: this.userPoolId,
-      ClientId: this.clientId,
-      AuthFlow: "USER_SRP_AUTH",
-      AuthParameters: {
-        USERNAME: code,
-        SRP_A: "",
-      },
-    });
-
-    // For Google OAuth, Cognito redirects with tokens directly.
-    // The BFF should handle the Hosted UI callback which returns tokens in the URL fragment.
-    // This method is called when the BFF exchanges the authorization code.
     const tokenResponse = await fetch(
-      `${this.issuer}/oauth2/token`,
+      `${this.domain}/oauth2/token`,
       {
         method: "POST",
         headers: { "Content-Type": "application/x-www-form-urlencoded" },
@@ -334,9 +340,9 @@ export class CognitoService {
   // ─── Helpers ───────────────────────────────────────────────────
 
   private getRequiredConfig(): void {
-    if (!this.userPoolId || !this.clientId) {
+    if (!this.userPoolId || !this.clientId || !this.domain) {
       throw new Error(
-        "COGNITO_USER_POOL_ID and COGNITO_CLIENT_ID are required.",
+        "COGNITO_USER_POOL_ID, COGNITO_CLIENT_ID and COGNITO_DOMAIN are required.",
       );
     }
   }

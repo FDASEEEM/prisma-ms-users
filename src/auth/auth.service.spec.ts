@@ -3,21 +3,22 @@ import { AuthService } from "./auth.service";
 import { CognitoService } from "../infrastructure/cognito/cognito.service";
 import { UsersService } from "../users/users.service";
 import { AuditService } from "../infrastructure/audit/audit.service";
-import { UnauthorizedException } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+  UnauthorizedException,
+} from "@nestjs/common";
 
 describe("AuthService", () => {
   let service: AuthService;
 
   const cognitoService = {
-    signJwt: jest.fn(),
-    verifyToken: jest.fn(),
-    hashPassword: jest.fn(),
-    verifyPassword: jest.fn(),
+    createUserWithPasswordAndMetadata: jest.fn(),
+    login: jest.fn(),
+    refresh: jest.fn(),
     getGoogleAuthUrl: jest.fn(),
     exchangeGoogleCode: jest.fn(),
-    login: jest.fn(),
-    register: jest.fn(),
-    refresh: jest.fn(),
     logout: jest.fn(),
     getUser: jest.fn(),
   };
@@ -27,6 +28,7 @@ describe("AuthService", () => {
     findById: jest.fn(),
     createProfile: jest.fn(),
     updateProfile: jest.fn(),
+    findBySupabaseUserId: jest.fn(),
     linkSupabaseUser: jest.fn(),
   };
 
@@ -54,14 +56,15 @@ describe("AuthService", () => {
   });
 
   describe("register", () => {
-    it("creates a profile and returns tokens", async () => {
+    it("creates the Cognito user and the profile, returns empty tokens (Hosted UI)", async () => {
       usersService.findByEmail.mockResolvedValue(null);
-      cognitoService.hashPassword.mockResolvedValue("hashed-pw");
+      cognitoService.createUserWithPasswordAndMetadata.mockResolvedValue({
+        id: "cognito-1",
+      });
       usersService.createProfile.mockResolvedValue({
         id: "profile-1",
         email: "test@test.com",
       });
-      cognitoService.signJwt.mockResolvedValue("jwt-token");
 
       const result = await service.register(
         {
@@ -69,13 +72,27 @@ describe("AuthService", () => {
           password: "secret123",
           rut: "12.345.678-9",
           nombreCompleto: "Test User",
+          colegioId: "colegio-1",
         } as any,
         "127.0.0.1",
       );
 
-      expect(result.access_token).toBe("jwt-token");
+      expect(cognitoService.createUserWithPasswordAndMetadata).toHaveBeenCalledWith(
+        "test@test.com",
+        "secret123",
+        { nombreCompleto: "Test User" },
+        { role: "TEACHER", colegioId: "colegio-1" },
+      );
+      expect(usersService.createProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          supabaseUserId: "cognito-1",
+          email: "test@test.com",
+          role: "TEACHER",
+        }),
+      );
+      expect(result.access_token).toBe("");
+      expect(result.refresh_token).toBe("");
       expect(result.user.id).toBe("profile-1");
-      expect(cognitoService.hashPassword).toHaveBeenCalledWith("secret123");
     });
 
     it("throws ConflictException when email already exists", async () => {
@@ -90,27 +107,36 @@ describe("AuthService", () => {
           } as any,
           "127.0.0.1",
         ),
-      ).rejects.toThrow("El email ya está registrado.");
+      ).rejects.toThrow(ConflictException);
     });
   });
 
   describe("login", () => {
     it("returns tokens when credentials are valid", async () => {
-      const profile = { id: "profile-1", email: "test@test.com" };
-      usersService.findByEmail.mockResolvedValue(profile);
-      cognitoService.verifyPassword.mockResolvedValue(true);
-      cognitoService.signJwt.mockResolvedValue("jwt-token");
+      cognitoService.login.mockResolvedValue({
+        accessToken: "access-1",
+        refreshToken: "refresh-1",
+        tokenType: "bearer",
+        expiresIn: 3600,
+        user: { id: "cognito-1", email: "test@test.com" },
+      });
+      usersService.findBySupabaseUserId.mockResolvedValue({
+        id: "profile-1",
+        email: "test@test.com",
+      });
 
       const result = await service.login(
         { email: "test@test.com", password: "secret123" },
         "127.0.0.1",
       );
 
-      expect(result.access_token).toBe("jwt-token");
+      expect(result.access_token).toBe("access-1");
+      expect(result.refresh_token).toBe("refresh-1");
       expect(result.user.id).toBe("profile-1");
     });
 
     it("throws UnauthorizedException for invalid credentials", async () => {
+      cognitoService.login.mockRejectedValue(new UnauthorizedException());
       usersService.findByEmail.mockResolvedValue(null);
 
       await expect(
@@ -124,22 +150,122 @@ describe("AuthService", () => {
 
   describe("refresh", () => {
     it("returns new tokens for a valid refresh token", async () => {
-      cognitoService.verifyToken.mockResolvedValue({
-        sub: "profile-1",
-        type: "refresh",
+      cognitoService.refresh.mockResolvedValue({
+        accessToken: "access-2",
+        refreshToken: "refresh-2",
+        tokenType: "bearer",
+        expiresIn: 3600,
+        user: { id: "cognito-1" },
       });
-      usersService.findById.mockResolvedValue({
+      usersService.findBySupabaseUserId.mockResolvedValue({
         id: "profile-1",
         email: "test@test.com",
       });
-      cognitoService.signJwt.mockResolvedValue("new-jwt");
 
       const result = await service.refresh(
         { refreshToken: "valid-refresh" },
         "127.0.0.1",
       );
 
-      expect(result.access_token).toBe("new-jwt");
+      expect(result.access_token).toBe("access-2");
+      expect(cognitoService.refresh).toHaveBeenCalledWith("valid-refresh");
+    });
+  });
+
+  describe("getGoogleAuthUrl", () => {
+    it("requires a redirectTo", async () => {
+      await expect(
+        service.getGoogleAuthUrl(undefined),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it("delegates to CognitoService", async () => {
+      cognitoService.getGoogleAuthUrl.mockResolvedValue({
+        url: "https://domain/oauth2/authorize?...",
+        state: "state-1",
+      });
+
+      const result = await service.getGoogleAuthUrl(
+        "http://localhost:3010/api/auth/google/callback",
+      );
+
+      expect(result.url).toContain("oauth2/authorize");
+      expect(cognitoService.getGoogleAuthUrl).toHaveBeenCalledWith(
+        "http://localhost:3010/api/auth/google/callback",
+      );
+    });
+  });
+
+  describe("exchangeGoogleCode", () => {
+    it("returns a session and provisions a new TEACHER profile", async () => {
+      cognitoService.exchangeGoogleCode.mockResolvedValue({
+        accessToken: "access-g",
+        refreshToken: "refresh-g",
+        tokenType: "bearer",
+        expiresIn: 3600,
+        user: {
+          id: "google-1",
+          email: "google@test.com",
+          user_metadata: { full_name: "Google User" },
+        },
+      });
+      usersService.findBySupabaseUserId.mockRejectedValue(new NotFoundException());
+      usersService.findByEmail.mockResolvedValue(null);
+      usersService.createProfile.mockResolvedValue({
+        id: "profile-g",
+        email: "google@test.com",
+        role: "TEACHER",
+      });
+
+      const result = await service.exchangeGoogleCode("code-1", "state-1", "ip");
+
+      expect(result.access_token).toBe("access-g");
+      expect(usersService.createProfile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          supabaseUserId: "google-1",
+          email: "google@test.com",
+          role: "TEACHER",
+          nombreCompleto: "Google User",
+        }),
+      );
+    });
+
+    it("links an existing profile by email when there is no supabase user", async () => {
+      cognitoService.exchangeGoogleCode.mockResolvedValue({
+        accessToken: "access-g",
+        refreshToken: "refresh-g",
+        tokenType: "bearer",
+        expiresIn: 3600,
+        user: { id: "google-1", email: "existing@test.com" },
+      });
+      usersService.findBySupabaseUserId.mockRejectedValue(new NotFoundException());
+      usersService.findByEmail.mockResolvedValue({ id: "profile-existing" });
+      usersService.linkSupabaseUser.mockResolvedValue({
+        id: "profile-existing",
+        email: "existing@test.com",
+      });
+
+      const result = await service.exchangeGoogleCode("code-1", "state-1", "ip");
+
+      expect(result.user.id).toBe("profile-existing");
+      expect(usersService.linkSupabaseUser).toHaveBeenCalledWith(
+        "profile-existing",
+        "google-1",
+      );
+    });
+  });
+
+  describe("me", () => {
+    it("returns the profile from the authenticated user id (token sub = supabaseUserId)", async () => {
+      usersService.findBySupabaseUserId.mockResolvedValue({
+        id: "profile-1",
+        email: "test@test.com",
+      });
+
+      const result = await service.me({ user: { id: "profile-1" } });
+
+      expect(usersService.findBySupabaseUserId).toHaveBeenCalledWith("profile-1");
+      expect(result.id).toBe("profile-1");
     });
   });
 });
