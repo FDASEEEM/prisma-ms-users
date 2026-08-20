@@ -306,25 +306,41 @@ export class AuthService {
         throw error;
       });
 
+    const googleName =
+      (googleUser.user_metadata?.full_name as string) ??
+      (googleUser.user_metadata?.name as string) ??
+      null;
+
     if (existing) {
+      if (googleName && existing.nombreCompleto !== googleName) {
+        await this.usersService.updateProfile(googleUser.id, {
+          nombreCompleto: googleName,
+        } as any);
+        return this.usersService.findBySupabaseUserId(googleUser.id);
+      }
       return existing;
     }
 
     const byEmail = await this.usersService.findByEmail(email);
 
     if (byEmail) {
-      return this.usersService.linkSupabaseUser(byEmail.id, googleUser.id);
+      const linked = await this.usersService.linkSupabaseUser(
+        byEmail.id,
+        googleUser.id,
+      );
+      if (googleName && linked.nombreCompleto !== googleName) {
+        await this.usersService.updateProfile(googleUser.id, {
+          nombreCompleto: googleName,
+        } as any);
+        return this.usersService.findBySupabaseUserId(googleUser.id);
+      }
+      return linked;
     }
-
-    const nombreCompleto =
-      (googleUser.user_metadata?.full_name as string) ??
-      (googleUser.user_metadata?.name as string) ??
-      email;
 
     return this.usersService.createProfile({
       supabaseUserId: googleUser.id,
       email,
-      nombreCompleto,
+      nombreCompleto: googleName ?? email,
       role: "TEACHER",
       active: true,
     });
