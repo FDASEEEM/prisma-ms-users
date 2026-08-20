@@ -59,7 +59,7 @@ export class CognitoService {
       response_type: "code",
       client_id: this.clientId,
       redirect_uri: redirectTo,
-      scope: "openid email",
+      scope: "openid email profile",
       identity_provider: "Google",
       state,
     });
