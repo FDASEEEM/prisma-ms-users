@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException, ConflictException } from "@nestjs/common";
 import { Prisma } from "@prisma/client";
 import { PrismaService } from "../infrastructure/prisma/prisma.service";
-import { SupabaseService } from "../infrastructure/supabase/supabase.service";
+import { CognitoService } from "../infrastructure/cognito/cognito.service";
 import { AuditService } from "../infrastructure/audit/audit.service";
 import { CreateColegioDto } from "./dto/create-colegio.dto";
 import { UpdateColegioDto } from "./dto/update-colegio.dto";
@@ -10,7 +10,7 @@ import { UpdateColegioDto } from "./dto/update-colegio.dto";
 export class ColegiosService {
   constructor(
     private readonly prismaService: PrismaService,
-    private readonly supabaseService: SupabaseService,
+    private readonly cognitoService: CognitoService,
     private readonly auditService: AuditService,
   ) {}
 
@@ -32,15 +32,16 @@ export class ColegiosService {
 
     let supabaseUserId: string | null = null;
     try {
-      const supabaseResult = await this.supabaseService.createUserWithPasswordAndMetadata(
+      const cognitoResult = await this.cognitoService.createUserWithPasswordAndMetadata(
         dto.adminEmail,
         dto.adminPassword,
-        { role: "ADMIN", nombreCompleto: dto.adminNombre },
+        { nombreCompleto: dto.adminNombre },
+        { role: "ADMIN", colegioId: "" }, // colegioId set after colegio creation
       );
-      if (!supabaseResult?.id) {
-        throw new Error("Error creando usuario admin en Supabase");
+      if (!cognitoResult?.id) {
+        throw new Error("Error creating admin user in Cognito");
       }
-      supabaseUserId = supabaseResult.id;
+      supabaseUserId = cognitoResult.id;
     } catch (error) {
       await this.auditService.registrarEvento({
         tipoEvento: "colegio_create",
@@ -81,9 +82,8 @@ export class ColegiosService {
         },
       });
 
-      // El usuario admin se creo en Supabase antes de existir el colegio;
-      // ahora propagamos el tenant a app_metadata (lo leen perfil-alumno/docs).
-      await this.supabaseService.updateUserAppMetadata(supabaseUserId, {
+      // Update Cognito custom attributes with the correct colegioId
+      await this.cognitoService.updateUserAppMetadata(supabaseUserId, {
         role: "ADMIN",
         colegioId: colegio.id,
       });
@@ -107,7 +107,7 @@ export class ColegiosService {
       };
     } catch (error) {
       if (supabaseUserId) {
-        await this.supabaseService.deleteUser(supabaseUserId);
+        await this.cognitoService.deleteUser(supabaseUserId);
       }
       await this.auditService.registrarEvento({
         tipoEvento: "colegio_create",

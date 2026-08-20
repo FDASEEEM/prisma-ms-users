@@ -17,7 +17,7 @@ export class UsersService {
       data: {
         supabaseUserId: dto.supabaseUserId,
         email: dto.email,
-        rut: dto.rut,
+        rut: dto.rut ?? null,
         nombreCompleto: dto.nombreCompleto,
         establecimiento: dto.establecimiento,
         phone: dto.phone,
@@ -28,6 +28,25 @@ export class UsersService {
         colegioId: dto.colegioId,
       } as any,
     });
+  }
+
+  async linkSupabaseUser(profileId: string, supabaseUserId: string): Promise<User> {
+    return this.prismaService.user.update({
+      where: { id: profileId },
+      data: { supabaseUserId },
+    } as any);
+  }
+
+  async findById(id: string): Promise<User> {
+    const user = await this.prismaService.user.findUnique({
+      where: { id },
+    });
+
+    if (!user) {
+      throw new NotFoundException("User profile not found.");
+    }
+
+    return user;
   }
 
   async findBySupabaseUserId(supabaseUserId: string): Promise<User> {

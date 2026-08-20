@@ -1,10 +1,16 @@
-import { BadRequestException, Injectable } from "@nestjs/common";
+import {
+  BadRequestException,
+  ConflictException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from "@nestjs/common";
 import { User } from "@prisma/client";
 import { AuditService } from "../infrastructure/audit/audit.service";
 import {
-  SupabaseSessionResult,
-  SupabaseService,
-} from "../infrastructure/supabase/supabase.service";
+  CognitoService,
+  CognitoSessionResult,
+} from "../infrastructure/cognito/cognito.service";
 import { UsersService } from "../users/users.service";
 import { LoginDto } from "./dto/login.dto";
 import { RefreshTokenDto } from "./dto/refresh-token.dto";
@@ -22,22 +28,36 @@ type AuthenticatedRequest = {
 @Injectable()
 export class AuthService {
   constructor(
-    private readonly supabaseService: SupabaseService,
+    private readonly cognitoService: CognitoService,
     private readonly usersService: UsersService,
     private readonly auditService: AuditService,
   ) {}
 
   async register(dto: RegisterDto, ipOrigen?: string) {
-    let session: SupabaseSessionResult | null = null;
-
     try {
-      session = await this.supabaseService.register(dto.email, dto.password, {
-        role: "TEACHER",
-        colegioId: dto.colegioId ?? null,
-      });
+      const existingUser = await this.usersService.findByEmail(dto.email);
+      if (existingUser) {
+        throw new ConflictException("El email ya está registrado.");
+      }
+
+      const cognitoResult = await this.cognitoService.createUserWithPasswordAndMetadata(
+        dto.email,
+        dto.password,
+        {
+          nombreCompleto: dto.nombreCompleto,
+        },
+        {
+          role: "TEACHER",
+          colegioId: dto.colegioId ?? "",
+        },
+      );
+
+      if (!cognitoResult?.id) {
+        throw new Error("Error creating user in Cognito");
+      }
 
       const profile = await this.usersService.createProfile({
-        supabaseUserId: session.user.id,
+        supabaseUserId: cognitoResult.id,
         email: dto.email,
         rut: dto.rut,
         nombreCompleto: dto.nombreCompleto,
@@ -48,7 +68,7 @@ export class AuthService {
         active: true,
         role: "TEACHER",
         colegioId: dto.colegioId,
-      });
+      } as any);
 
       await this.auditService.registrarEvento({
         tipoEvento: "register",
@@ -58,12 +78,14 @@ export class AuthService {
         mensaje: "Registro de docente completado correctamente.",
       });
 
-      return this.mapSession(session, profile);
+      return {
+        access_token: "", // Front gets tokens from Cognito Hosted UI redirect
+        refresh_token: "",
+        token_type: "bearer",
+        expires_in: 900,
+        user: profile,
+      };
     } catch (error) {
-      if (session) {
-        await this.supabaseService.deleteUser(session.user.id);
-      }
-
       await this.auditService.registrarEvento({
         tipoEvento: "register",
         userId: null,
@@ -81,22 +103,27 @@ export class AuthService {
 
   async login(dto: LoginDto, ipOrigen?: string) {
     try {
-      const session = await this.supabaseService.login(dto.email, dto.password);
-      const user = await this.usersService.findBySupabaseUserId(
-        session.user.id,
-      );
+      const session = await this.cognitoService.login(dto.email, dto.password);
+
+      const profile = await this.usersService.findBySupabaseUserId(session.user.id);
 
       await this.auditService.registrarEvento({
         tipoEvento: "login",
-        userId: user.id,
+        userId: profile.id,
         ipOrigen,
         resultado: "success",
         mensaje: "Inicio de sesión exitoso.",
       });
 
-      return this.mapSession(session, user);
+      return {
+        access_token: session.accessToken,
+        refresh_token: session.refreshToken,
+        token_type: session.tokenType,
+        expires_in: session.expiresIn,
+        user: profile,
+      };
     } catch (error) {
-      const user = await this.usersService.findByEmail(dto.email);
+      const user = await this.usersService.findByEmail(dto.email).catch(() => null);
 
       await this.auditService.registrarEvento({
         tipoEvento: "login",
@@ -115,20 +142,25 @@ export class AuthService {
 
   async refresh(dto: RefreshTokenDto, ipOrigen?: string) {
     try {
-      const session = await this.supabaseService.refresh(dto.refreshToken);
-      const user = await this.usersService.findBySupabaseUserId(
-        session.user.id,
-      );
+      const session = await this.cognitoService.refresh(dto.refreshToken);
+
+      const profile = await this.usersService.findBySupabaseUserId(session.user.id);
 
       await this.auditService.registrarEvento({
         tipoEvento: "refresh",
-        userId: user.id,
+        userId: profile.id,
         ipOrigen,
         resultado: "success",
         mensaje: "Refresco de token ejecutado correctamente.",
       });
 
-      return this.mapSession(session, user);
+      return {
+        access_token: session.accessToken,
+        refresh_token: session.refreshToken,
+        token_type: session.tokenType,
+        expires_in: session.expiresIn,
+        user: profile,
+      };
     } catch (error) {
       await this.auditService.registrarEvento({
         tipoEvento: "refresh",
@@ -145,15 +177,58 @@ export class AuthService {
     }
   }
 
+  async getGoogleAuthUrl(redirectTo?: string) {
+    if (!redirectTo || redirectTo.length === 0) {
+      throw new BadRequestException("redirectTo is required.");
+    }
+
+    return this.cognitoService.getGoogleAuthUrl(redirectTo);
+  }
+
+  async exchangeGoogleCode(code: string, state: string, ipOrigen?: string) {
+    try {
+      const session = await this.cognitoService.exchangeGoogleCode(code, state);
+      const profile = await this.provisionGoogleUser(session.user);
+
+      await this.auditService.registrarEvento({
+        tipoEvento: "login",
+        userId: profile.id,
+        ipOrigen,
+        resultado: "success",
+        mensaje: "Inicio de sesión con Google exitoso.",
+      });
+
+      return {
+        access_token: session.accessToken,
+        refresh_token: session.refreshToken,
+        token_type: session.tokenType,
+        expires_in: session.expiresIn,
+        user: profile,
+      };
+    } catch (error) {
+      await this.auditService.registrarEvento({
+        tipoEvento: "login",
+        userId: null,
+        ipOrigen,
+        resultado: "failure",
+        mensaje:
+          error instanceof Error
+            ? error.message
+            : "Error inesperado al iniciar sesión con Google.",
+      });
+
+      throw error;
+    }
+  }
+
   async logout(authorization?: string, ipOrigen?: string) {
     const accessToken = this.getBearerToken(authorization);
-    const supabaseUser = await this.supabaseService.getUser(accessToken);
 
     try {
-      await this.supabaseService.logout(accessToken);
-      const user = await this.usersService.findBySupabaseUserId(
-        supabaseUser.id,
-      );
+      await this.cognitoService.logout(accessToken);
+
+      const cognitoUser = await this.cognitoService.getUser(accessToken);
+      const user = await this.usersService.findBySupabaseUserId(cognitoUser.id);
 
       await this.auditService.registrarEvento({
         tipoEvento: "logout",
@@ -168,10 +243,8 @@ export class AuthService {
       const userId = await (async () => {
         try {
           const accessToken = this.getBearerToken(authorization);
-          const supabaseUser = await this.supabaseService.getUser(accessToken);
-          const user = await this.usersService.findBySupabaseUserId(
-            supabaseUser.id,
-          );
+          const cognitoUser = await this.cognitoService.getUser(accessToken);
+          const user = await this.usersService.findBySupabaseUserId(cognitoUser.id);
           return user.id;
         } catch {
           return null;
@@ -194,13 +267,13 @@ export class AuthService {
   }
 
   async me(request: AuthenticatedRequest) {
-    const supabaseUserId = request.user?.id;
+    const userId = request.user?.id;
 
-    if (!supabaseUserId) {
+    if (!userId) {
       throw new BadRequestException("Authenticated user not found.");
     }
 
-    return this.usersService.findBySupabaseUserId(supabaseUserId);
+    return this.usersService.findBySupabaseUserId(userId);
   }
 
   async updateMe(
@@ -208,13 +281,69 @@ export class AuthService {
     dto: UpdateMeDto,
     ipOrigen?: string,
   ) {
-    const supabaseUserId = request.user?.id;
+    const userId = request.user?.id;
 
-    if (!supabaseUserId) {
+    if (!userId) {
       throw new BadRequestException("Authenticated user not found.");
     }
 
-    return this.usersService.updateProfile(supabaseUserId, dto, ipOrigen);
+    return this.usersService.updateProfile(userId, dto, ipOrigen);
+  }
+
+  private async provisionGoogleUser(googleUser: {
+    id: string;
+    email?: string;
+    user_metadata?: Record<string, any>;
+  }): Promise<User> {
+    const email = googleUser.email ?? "";
+
+    const existing = await this.usersService
+      .findBySupabaseUserId(googleUser.id)
+      .catch((error) => {
+        if (error instanceof NotFoundException) {
+          return null;
+        }
+        throw error;
+      });
+
+    const googleName =
+      (googleUser.user_metadata?.full_name as string) ??
+      (googleUser.user_metadata?.name as string) ??
+      null;
+
+    if (existing) {
+      if (googleName && existing.nombreCompleto !== googleName) {
+        await this.usersService.updateProfile(googleUser.id, {
+          nombreCompleto: googleName,
+        } as any);
+        return this.usersService.findBySupabaseUserId(googleUser.id);
+      }
+      return existing;
+    }
+
+    const byEmail = await this.usersService.findByEmail(email);
+
+    if (byEmail) {
+      const linked = await this.usersService.linkSupabaseUser(
+        byEmail.id,
+        googleUser.id,
+      );
+      if (googleName && linked.nombreCompleto !== googleName) {
+        await this.usersService.updateProfile(googleUser.id, {
+          nombreCompleto: googleName,
+        } as any);
+        return this.usersService.findBySupabaseUserId(googleUser.id);
+      }
+      return linked;
+    }
+
+    return this.usersService.createProfile({
+      supabaseUserId: googleUser.id,
+      email,
+      nombreCompleto: googleName ?? email,
+      role: "TEACHER",
+      active: true,
+    });
   }
 
   private getBearerToken(authorization?: string): string {
@@ -229,15 +358,5 @@ export class AuthService {
     }
 
     return token;
-  }
-
-  private mapSession(session: SupabaseSessionResult, profile?: User) {
-    return {
-      access_token: session.accessToken,
-      refresh_token: session.refreshToken,
-      token_type: session.tokenType,
-      expires_in: session.expiresIn,
-      user: profile ?? session.user,
-    };
   }
 }

@@ -6,6 +6,8 @@ import { RefreshTokenDto } from "./auth/dto/refresh-token.dto";
 import { UpdateMeDto } from "./auth/dto/update-me.dto";
 import { CreateUserProfileDto } from "./users/dto/create-user-profile.dto";
 import { UpdateUserProfileDto } from "./users/dto/update-user-profile.dto";
+import { GoogleUrlDto } from "./auth/dto/google-url.dto";
+import { GoogleCallbackDto } from "./auth/dto/google-callback.dto";
 
 describe("DTOs", () => {
   describe("RegisterDto", () => {
@@ -157,16 +159,51 @@ describe("DTOs", () => {
       expect(errors[0].property).toBe("email");
     });
 
-    it("fails with short rut", async () => {
+    it("passes without rut (Google OAuth users may not have a RUT)", async () => {
       const dto = plainToInstance(CreateUserProfileDto, {
-        supabaseUserId: "supabase-1",
-        email: "docente@correo.com",
-        rut: "123456",
+        supabaseUserId: "google-1",
+        email: "docente@gmail.com",
         nombreCompleto: "Juan Pérez",
       } as Record<string, unknown>);
       const errors = await validate(dto as any);
+      expect(errors).toHaveLength(0);
+    });
+  });
+
+  describe("GoogleUrlDto", () => {
+    it("passes with a redirectTo", async () => {
+      const dto = plainToInstance(GoogleUrlDto, {
+        redirectTo: "http://localhost:3010/api/auth/google/callback",
+      } as Record<string, unknown>);
+      const errors = await validate(dto as any);
+      expect(errors).toHaveLength(0);
+    });
+
+    it("fails when redirectTo is missing", async () => {
+      const dto = plainToInstance(GoogleUrlDto, {} as Record<string, unknown>);
+      const errors = await validate(dto as any);
       expect(errors.length).toBeGreaterThan(0);
-      expect(errors[0].property).toBe("rut");
+      expect(errors[0].property).toBe("redirectTo");
+    });
+  });
+
+  describe("GoogleCallbackDto", () => {
+    it("passes with code and state", async () => {
+      const dto = plainToInstance(GoogleCallbackDto, {
+        code: "the-code",
+        state: "pkce-state",
+      } as Record<string, unknown>);
+      const errors = await validate(dto as any);
+      expect(errors).toHaveLength(0);
+    });
+
+    it("fails when code is missing", async () => {
+      const dto = plainToInstance(GoogleCallbackDto, {
+        state: "pkce-state",
+      } as Record<string, unknown>);
+      const errors = await validate(dto as any);
+      expect(errors.length).toBeGreaterThan(0);
+      expect(errors[0].property).toBe("code");
     });
   });
 

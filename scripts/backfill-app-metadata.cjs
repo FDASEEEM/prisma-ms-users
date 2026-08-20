@@ -1,26 +1,27 @@
 /**
- * Backfill de app_metadata en Supabase.
+ * Backfill de custom attributes en Cognito.
  *
  * Por que: los microservicios (perfil-alumno, docs) leen el tenant del usuario
- * desde `app_metadata.colegioId` / `app_metadata.role` del JWT. ms-users solo
- * escribia esos datos en `user_metadata` (editable por el usuario, e ignorado
- * por el guard), por lo que los tokens nunca llevaban colegioId -> 403
- * "User has no colegioId in token".
+ * desde los custom attributes (custom:role, custom:colegioId) del JWT, o desde
+ * la tabla Postgres.
  *
  * Este script toma la verdad desde la tabla Postgres `user` y la propaga a
- * `app_metadata` (server-only) para los usuarios YA existentes. Los usuarios
- * nuevos y las reasignaciones de rol/colegio ya se sincronizan en el codigo.
+ * los custom attributes de Cognito para los usuarios YA existentes.
  *
- * IMPORTANTE: app_metadata solo viaja en tokens nuevos. Tras correr esto, los
- * usuarios deben volver a iniciar sesion (o refrescar el token) para que el
- * 403 desaparezca.
+ * IMPORTANTE: Los custom attributes solo viajan en tokens nuevos si se
+ * configura un Pre Token Generation Lambda trigger. Sin ese trigger,
+ * los microservicios deben leer role/colegioId desde Postgres.
  *
  * Uso:  node scripts/backfill-app-metadata.cjs [--dry-run]
  */
 const fs = require("fs");
 const path = require("path");
 const { PrismaClient } = require("@prisma/client");
-const { createClient } = require("@supabase/supabase-js");
+const {
+  CognitoIdentityProviderClient,
+  AdminGetUserCommand,
+  AdminUpdateUserAttributesCommand,
+} = require("@aws-sdk/client-cognito-identity-provider");
 
 function loadEnv(filePath) {
   const content = fs.readFileSync(filePath, "utf8");
@@ -46,22 +47,18 @@ async function main() {
   loadEnv(path.join(__dirname, "..", ".env"));
 
   const prisma = new PrismaClient();
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
-      },
-    },
-  );
+  const cognito = new CognitoIdentityProviderClient({
+    region: process.env.COGNITO_REGION || "us-east-1",
+  });
+  const userPoolId = process.env.COGNITO_USER_POOL_ID;
+
+  if (!userPoolId) {
+    throw new Error("COGNITO_USER_POOL_ID is required in .env");
+  }
 
   const summary = { total: 0, updated: 0, skipped: 0, failed: 0 };
 
   try {
-    // supabaseUserId es columna requerida (String) -> todos los usuarios tienen uno.
     const users = await prisma.user.findMany({
       select: { id: true, email: true, role: true, colegioId: true, supabaseUserId: true },
     });
@@ -70,26 +67,38 @@ async function main() {
     console.log(`Encontrados ${users.length} usuarios con supabaseUserId.${dryRun ? " (DRY RUN)" : ""}`);
 
     for (const user of users) {
-      const appMetadata = { role: user.role, colegioId: user.colegioId ?? null };
+      const attributes = [
+        { Name: "custom:role", Value: user.role },
+        { Name: "custom:colegioId", Value: user.colegioId || "" },
+      ];
 
       if (dryRun) {
-        console.log(`  [dry] ${user.email} -> ${JSON.stringify(appMetadata)}`);
+        console.log(`  [dry] ${user.email} -> ${JSON.stringify({ role: user.role, colegioId: user.colegioId })}`);
         summary.skipped += 1;
         continue;
       }
 
-      const result = await supabase.auth.admin.updateUserById(user.supabaseUserId, {
-        app_metadata: appMetadata,
-      });
+      try {
+        // Resolve username from supabaseUserId (which is the Cognito sub)
+        const getUserCommand = new AdminGetUserCommand({
+          UserPoolId: userPoolId,
+          Username: user.supabaseUserId,
+        });
+        const cognitoUser = await cognito.send(getUserCommand);
 
-      if (result.error || !result.data.user) {
+        const updateCommand = new AdminUpdateUserAttributesCommand({
+          UserPoolId: userPoolId,
+          Username: cognitoUser.Username!,
+          UserAttributes: attributes,
+        });
+        await cognito.send(updateCommand);
+
+        summary.updated += 1;
+        console.log(`  [ok]  ${user.email} -> ${JSON.stringify({ role: user.role, colegioId: user.colegioId })}`);
+      } catch (error) {
         summary.failed += 1;
-        console.error(`  [FAIL] ${user.email}: ${result.error?.message ?? "sin usuario"}`);
-        continue;
+        console.error(`  [FAIL] ${user.email}: ${error.message ?? "sin usuario"}`);
       }
-
-      summary.updated += 1;
-      console.log(`  [ok]  ${user.email} -> ${JSON.stringify(appMetadata)}`);
     }
   } finally {
     await prisma.$disconnect();
@@ -97,7 +106,7 @@ async function main() {
 
   console.log("\nResumen:", JSON.stringify(summary, null, 2));
   if (!dryRun && summary.updated > 0) {
-    console.log("\nRecorda: los usuarios deben re-loguearse para que el nuevo token lleve el colegioId.");
+    console.log("\nRecorda: los usuarios deben re-loguearse para que el nuevo token lleve los attributes actualizados (si se configura Pre Token Generation Lambda).");
   }
 }
 

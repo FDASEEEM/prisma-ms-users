@@ -27,7 +27,8 @@
     "@nestjs/platform-express": "^10.0.0",
     "@nestjs/swagger": "^7.0.0",
     "@prisma/client": "^5.0.0",
-    "@supabase/supabase-js": "^2.0.0",
+    "@aws-sdk/client-cognito-identity-provider": "^3.0.0",
+    "jose": "^6.0.0",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.14.1",
     "dotenv": "^16.4.5",
@@ -58,9 +59,12 @@
     ],
     "rootDir": ".",
     "testRegex": ".*\\.(spec|e2e-spec)\\.ts$",
-    "transform": {
-      "^.+\\.(t|j)s$": "ts-jest"
-    },
+"transform": {
+        "^.+\\.(t|j)s$": "ts-jest"
+      },
+      "transformIgnorePatterns": [
+        "/node_modules/(?!jose)/"
+      ],
     "collectCoverageFrom": [
       "src/**/*.(t|j)s",
       "!src/main.ts",
@@ -69,7 +73,7 @@
       "!src/users/users.module.ts",
       "!src/infrastructure/audit/audit.module.ts",
       "!src/infrastructure/prisma/prisma.module.ts",
-      "!src/infrastructure/supabase/supabase.module.ts"
+      "!src/infrastructure/cognito/cognito.module.ts"
     ],
     "coverageDirectory": "./coverage",
     "coverageThreshold": {

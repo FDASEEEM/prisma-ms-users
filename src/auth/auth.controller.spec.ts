@@ -10,6 +10,8 @@ describe("AuthController", () => {
     logout: jest.fn(),
     me: jest.fn(),
     updateMe: jest.fn(),
+    getGoogleAuthUrl: jest.fn(),
+    exchangeGoogleCode: jest.fn(),
   } as any;
 
   const controller = new AuthController(authService);
@@ -54,6 +56,45 @@ describe("AuthController", () => {
       await controller.refresh(req, dto);
 
       expect(authService.refresh).toHaveBeenCalledWith(dto, "172.16.0.1");
+    });
+  });
+
+  describe("googleUrl", () => {
+    it("passes the redirectTo to AuthService.getGoogleAuthUrl", async () => {
+      authService.getGoogleAuthUrl.mockResolvedValue({
+        url: "https://google.com/auth",
+        state: "pkce-state",
+      });
+
+      const result = await controller.googleUrl({
+        redirectTo: "http://localhost:3010/api/auth/google/callback",
+      });
+
+      expect(authService.getGoogleAuthUrl).toHaveBeenCalledWith(
+        "http://localhost:3010/api/auth/google/callback",
+      );
+      expect(result).toEqual({ url: "https://google.com/auth", state: "pkce-state" });
+    });
+  });
+
+  describe("googleCallback", () => {
+    it("passes code, state and ip to AuthService.exchangeGoogleCode", async () => {
+      authService.exchangeGoogleCode.mockResolvedValue({
+        access_token: "access",
+      });
+      const req = mockRequest("192.168.1.1");
+
+      const result = await controller.googleCallback(req, {
+        code: "the-code",
+        state: "pkce-state",
+      });
+
+      expect(authService.exchangeGoogleCode).toHaveBeenCalledWith(
+        "the-code",
+        "pkce-state",
+        "192.168.1.1",
+      );
+      expect(result).toEqual({ access_token: "access" });
     });
   });
 

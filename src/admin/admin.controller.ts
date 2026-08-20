@@ -12,7 +12,7 @@ import {
 import { ApiBearerAuth, ApiOperation, ApiTags } from "@nestjs/swagger";
 import { Request } from "express";
 import { PrismaService } from "../infrastructure/prisma/prisma.service";
-import { SupabaseService } from "../infrastructure/supabase/supabase.service";
+import { CognitoService } from "../infrastructure/cognito/cognito.service";
 import { AuditService } from "../infrastructure/audit/audit.service";
 import { AdminRoleGuard } from "./guards/admin-role.guard";
 
@@ -23,7 +23,7 @@ import { AdminRoleGuard } from "./guards/admin-role.guard";
 export class AdminController {
   constructor(
     private readonly prismaService: PrismaService,
-    private readonly supabaseService: SupabaseService,
+    private readonly cognitoService: CognitoService,
     private readonly auditService: AuditService,
   ) {}
 
@@ -90,28 +90,21 @@ export class AdminController {
       }
     }
 
-    const supabaseResult = await this.supabaseService.createUserWithPasswordAndMetadata(
+    const cognitoResult = await this.cognitoService.createUserWithPasswordAndMetadata(
       body.email,
       body.password,
-      {
-        role: body.role ?? "TEACHER",
-        nombreCompleto: body.nombreCompleto,
-        colegioId: colegioId ?? null,
-      },
-      // app_metadata: fuente segura del tenant leida por perfil-alumno/docs.
-      {
-        role: body.role ?? "TEACHER",
-        colegioId: colegioId ?? null,
-      },
+      { nombreCompleto: body.nombreCompleto },
+      { role: body.role ?? "TEACHER", colegioId: colegioId ?? "" },
     );
-    if (!supabaseResult?.id) {
-      return { ok: false, message: "Error creando usuario en Supabase" };
+
+    if (!cognitoResult?.id) {
+      return { ok: false, message: "Error creando usuario en Cognito" };
     }
 
     const user = await this.prismaService.user.create({
       data: {
         email: body.email,
-        supabaseUserId: supabaseResult.id,
+        supabaseUserId: cognitoResult.id,
         rut:
           body.rut ||
           `${Date.now()
@@ -173,10 +166,9 @@ export class AdminController {
       },
     });
 
-    // Propagar rol/colegio al app_metadata de Supabase para que el proximo
-    // token del usuario lleve el tenant correcto (perfil-alumno/docs lo leen).
+    // Sync role/colegioId to Cognito custom attributes so the next token carries the tenant.
     if (user.supabaseUserId) {
-      await this.supabaseService.updateUserAppMetadata(user.supabaseUserId, {
+      await this.cognitoService.updateUserAppMetadata(user.supabaseUserId, {
         role: user.role,
         colegioId: user.colegioId ?? null,
       });
@@ -258,7 +250,7 @@ export class AdminController {
         ? body.newPassword
         : this.generateTemporaryPassword();
 
-    await this.supabaseService.resetUserPassword(user.supabaseUserId, newPassword);
+    await this.cognitoService.resetUserPassword(user.supabaseUserId, newPassword);
 
     if (user.role === "ADMIN") {
       await this.auditService.registrarEvento({

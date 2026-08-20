@@ -5,11 +5,11 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { Request } from "express";
-import { SupabaseService } from "../../infrastructure/supabase/supabase.service";
+import { CognitoService } from "../../infrastructure/cognito/cognito.service";
 
 @Injectable()
-export class SupabaseAuthGuard implements CanActivate {
-  constructor(private readonly supabaseService: SupabaseService) {}
+export class CognitoAuthGuard implements CanActivate {
+  constructor(private readonly cognitoService: CognitoService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
     const request = context
@@ -27,7 +27,13 @@ export class SupabaseAuthGuard implements CanActivate {
       throw new UnauthorizedException("Invalid Authorization header.");
     }
 
-    request.user = await this.supabaseService.getUser(token);
+    const payload = await this.cognitoService.verifyToken(token);
+
+    request.user = {
+      id: payload.sub,
+      email: payload.email,
+    };
+
     return true;
   }
 }
