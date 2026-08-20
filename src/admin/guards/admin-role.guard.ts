@@ -1,12 +1,12 @@
 import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
 import { Request } from "express";
-import { SupabaseService } from "../../infrastructure/supabase/supabase.service";
+import { CognitoService } from "../../infrastructure/cognito/cognito.service";
 import { UsersService } from "../../users/users.service";
 
 @Injectable()
 export class AdminRoleGuard implements CanActivate {
   constructor(
-    private readonly supabaseService: SupabaseService,
+    private readonly cognitoService: CognitoService,
     private readonly usersService: UsersService,
   ) {}
 
@@ -24,8 +24,9 @@ export class AdminRoleGuard implements CanActivate {
       throw new UnauthorizedException("Invalid Authorization header.");
     }
 
-    const supabaseUser = await this.supabaseService.getUser(token);
-    const profile = await this.usersService.findBySupabaseUserId(supabaseUser.id);
+    const payload = await this.cognitoService.verifyToken(token);
+
+    const profile = await this.usersService.findBySupabaseUserId(payload.sub as string);
 
     if (profile.role !== "ADMIN" && profile.role !== "SUPERADMIN") {
       throw new UnauthorizedException("Admin role required.");

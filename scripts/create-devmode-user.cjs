@@ -1,7 +1,12 @@
 const fs = require("fs");
 const path = require("path");
 const { PrismaClient } = require("@prisma/client");
-const { createClient } = require("@supabase/supabase-js");
+const {
+  CognitoIdentityProviderClient,
+  AdminCreateUserCommand,
+  AdminSetUserPasswordCommand,
+  AdminGetUserCommand,
+} = require("@aws-sdk/client-cognito-identity-provider");
 
 function loadEnv(filePath) {
   const content = fs.readFileSync(filePath, "utf8");
@@ -39,53 +44,65 @@ async function main() {
   ];
 
   const prisma = new PrismaClient();
-  const supabase = createClient(
-    process.env.SUPABASE_URL,
-    process.env.SUPABASE_SERVICE_ROLE_KEY,
-    {
-      auth: {
-        autoRefreshToken: false,
-        persistSession: false,
-        detectSessionInUrl: false,
-      },
-    },
-  );
+  const cognito = new CognitoIdentityProviderClient({
+    region: process.env.COGNITO_REGION || "us-east-1",
+  });
+  const userPoolId = process.env.COGNITO_USER_POOL_ID;
+
+  if (!userPoolId) {
+    throw new Error("COGNITO_USER_POOL_ID is required in .env");
+  }
 
   try {
-    const { data, error } = await supabase.auth.admin.listUsers({
-      page: 1,
-      perPage: 1000,
-    });
+    let authSub = null;
 
-    if (error) {
-      throw error;
+    // Check if user already exists
+    try {
+      const getUserCommand = new AdminGetUserCommand({
+        UserPoolId: userPoolId,
+        Username: email,
+      });
+      const result = await cognito.send(getUserCommand);
+      authSub = result.UserAttributes?.find((a) => a.Name === "sub")?.Value;
+
+      // Update password
+      const setPasswordCommand = new AdminSetUserPasswordCommand({
+        UserPoolId: userPoolId,
+        Username: email,
+        Password: password,
+        Permanent: true,
+      });
+      await cognito.send(setPasswordCommand);
+    } catch (error) {
+      if (error.name === "UserNotFoundException") {
+        // Create user
+        const createUserCommand = new AdminCreateUserCommand({
+          UserPoolId: userPoolId,
+          Username: email,
+          UserAttributes: [
+            { Name: "email", Value: email },
+            { Name: "email_verified", Value: "true" },
+          ],
+          MessageAction: "SUPPRESS",
+        });
+        const result = await cognito.send(createUserCommand);
+        authSub = result.User?.Attributes?.find((a) => a.Name === "sub")?.Value;
+
+        // Set permanent password
+        const setPasswordCommand = new AdminSetUserPasswordCommand({
+          UserPoolId: userPoolId,
+          Username: email,
+          Password: password,
+          Permanent: true,
+        });
+        await cognito.send(setPasswordCommand);
+      } else {
+        throw error;
+      }
     }
 
-    let authUser = data.users.find((user) => user.email === email) ?? null;
-
-    if (authUser) {
-      const updateResult = await supabase.auth.admin.updateUserById(authUser.id, {
-        password,
-        email_confirm: true,
-      });
-
-      if (updateResult.error || !updateResult.data.user) {
-        throw updateResult.error ?? new Error("No se pudo actualizar el usuario en Supabase.");
-      }
-
-      authUser = updateResult.data.user;
-    } else {
-      const createResult = await supabase.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-      });
-
-      if (createResult.error || !createResult.data.user) {
-        throw createResult.error ?? new Error("No se pudo crear el usuario en Supabase.");
-      }
-
-      authUser = createResult.data.user;
+    if (!authSub) {
+      throw new Error("Could not get user sub from Cognito.");
     }
 
     let rut = desiredRutCandidates[0];
@@ -100,7 +117,7 @@ async function main() {
     const profile = await prisma.user.upsert({
       where: { email },
       update: {
-        supabaseUserId: authUser.id,
+        supabaseUserId: authSub,
         rut,
         nombreCompleto: "Dev Mode Prisma",
         establecimiento: "PRISMA",
@@ -111,7 +128,7 @@ async function main() {
         role: "ADMIN",
       },
       create: {
-        supabaseUserId: authUser.id,
+        supabaseUserId: authSub,
         email,
         rut,
         nombreCompleto: "Dev Mode Prisma",
@@ -129,7 +146,7 @@ async function main() {
         {
           ok: true,
           email: profile.email,
-          authUserId: authUser.id,
+          authUserId: authSub,
           profileId: profile.id,
           rut: profile.rut,
         },

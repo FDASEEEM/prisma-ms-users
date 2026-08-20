@@ -1,23 +1,24 @@
 import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
 import { SuperAdminRoleGuard } from './superadmin-role.guard';
-import { SupabaseService } from '../../infrastructure/supabase/supabase.service';
+import { CognitoService } from '../../infrastructure/cognito/cognito.service';
 import { UsersService } from '../../users/users.service';
 
 describe('SuperAdminRoleGuard', () => {
   let guard: SuperAdminRoleGuard;
-  let supabaseService: jest.Mocked<SupabaseService>;
+  let cognitoService: jest.Mocked<CognitoService>;
   let usersService: jest.Mocked<UsersService>;
 
-  beforeEach(async () => {
-    supabaseService = {
-      getUser: jest.fn(),
+  beforeEach(() => {
+    cognitoService = {
+      verifyToken: jest.fn(),
     } as any;
 
     usersService = {
       findBySupabaseUserId: jest.fn(),
     } as any;
 
-    guard = new SuperAdminRoleGuard(supabaseService, usersService);
+    guard = new SuperAdminRoleGuard(cognitoService, usersService);
+    jest.clearAllMocks();
   });
 
   const createMockContext = (authHeader?: string): ExecutionContext => {
@@ -34,19 +35,17 @@ describe('SuperAdminRoleGuard', () => {
 
   it('should throw UnauthorizedException if no authorization header', async () => {
     const context = createMockContext(undefined);
-
     await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
   });
 
   it('should throw UnauthorizedException if invalid authorization header', async () => {
     const context = createMockContext('InvalidToken');
-
     await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
   });
 
   it('should throw UnauthorizedException if role is not SUPERADMIN', async () => {
     const context = createMockContext('Bearer valid-token');
-    supabaseService.getUser.mockResolvedValue({ id: 'user-id' } as any);
+    cognitoService.verifyToken.mockResolvedValue({ sub: 'user-id' });
     usersService.findBySupabaseUserId.mockResolvedValue({
       id: 'user-id',
       role: 'ADMIN',
@@ -57,14 +56,13 @@ describe('SuperAdminRoleGuard', () => {
 
   it('should allow access if role is SUPERADMIN', async () => {
     const context = createMockContext('Bearer valid-token');
-    supabaseService.getUser.mockResolvedValue({ id: 'user-id' } as any);
+    cognitoService.verifyToken.mockResolvedValue({ sub: 'user-id' });
     usersService.findBySupabaseUserId.mockResolvedValue({
       id: 'user-id',
       role: 'SUPERADMIN',
     } as any);
 
     const result = await guard.canActivate(context);
-
     expect(result).toBe(true);
   });
 
@@ -76,7 +74,7 @@ describe('SuperAdminRoleGuard', () => {
       }),
     } as ExecutionContext;
 
-    supabaseService.getUser.mockResolvedValue({ id: 'user-id' } as any);
+    cognitoService.verifyToken.mockResolvedValue({ sub: 'user-id' });
     usersService.findBySupabaseUserId.mockResolvedValue({
       id: 'user-id',
       role: 'SUPERADMIN',

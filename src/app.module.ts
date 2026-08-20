@@ -6,7 +6,7 @@ import { AdminModule } from "./admin/admin.module";
 import { ColegiosModule } from "./colegios/colegios.module";
 import { AuditModule } from "./infrastructure/audit/audit.module";
 import { PrismaModule } from "./infrastructure/prisma/prisma.module";
-import { SupabaseModule } from "./infrastructure/supabase/supabase.module";
+import { CognitoModule } from "./infrastructure/cognito/cognito.module";
 import { UsersModule } from "./users/users.module";
 
 @Module({
@@ -14,7 +14,7 @@ import { UsersModule } from "./users/users.module";
     ConfigModule.forRoot({ isGlobal: true }),
     PrismaModule,
     AuditModule,
-    SupabaseModule,
+    CognitoModule,
     UsersModule,
     AuthModule,
     AdminModule,

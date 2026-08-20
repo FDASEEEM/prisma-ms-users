@@ -15,12 +15,14 @@ async function bootstrap(): Promise<void> {
     process.env.CORS_ORIGIN?.split(",").map((origin) => origin.trim()).filter(Boolean) ??
     ["http://localhost:3000", "http://127.0.0.1:3000"];
 
-  app.enableCors({
-    origin: allowedOrigins,
-    credentials: true,
-    methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization"],
-  });
+  if (process.env.ENABLE_CORS !== "false") {
+    app.enableCors({
+      origin: allowedOrigins,
+      credentials: true,
+      methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
+      allowedHeaders: ["Content-Type", "Authorization"],
+    });
+  }
 
   app.setGlobalPrefix("api");
   app.useGlobalPipes(
