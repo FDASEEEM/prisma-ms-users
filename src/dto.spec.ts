@@ -133,7 +133,7 @@ describe("DTOs", () => {
   describe("CreateUserProfileDto", () => {
     it("passes with all required fields", async () => {
       const dto = plainToInstance(CreateUserProfileDto, {
-        supabaseUserId: "supabase-1",
+        cognitoSub: "supabase-1",
         email: "docente@correo.com",
         rut: "12.345.678-9",
         nombreCompleto: "Juan Pérez",
@@ -149,7 +149,7 @@ describe("DTOs", () => {
 
     it("fails with invalid email", async () => {
       const dto = plainToInstance(CreateUserProfileDto, {
-        supabaseUserId: "supabase-1",
+        cognitoSub: "supabase-1",
         email: "not-email",
         rut: "12.345.678-9",
         nombreCompleto: "Juan Pérez",
@@ -161,7 +161,7 @@ describe("DTOs", () => {
 
     it("passes without rut (Google OAuth users may not have a RUT)", async () => {
       const dto = plainToInstance(CreateUserProfileDto, {
-        supabaseUserId: "google-1",
+        cognitoSub: "google-1",
         email: "docente@gmail.com",
         nombreCompleto: "Juan Pérez",
       } as Record<string, unknown>);

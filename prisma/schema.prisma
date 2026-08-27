@@ -10,27 +10,27 @@ datasource db {
 }
 
 model Colegio {
-  id           String   @id @default(uuid()) @db.Uuid
+  id           String    @id @default(uuid()) @db.Uuid
   nombre       String
   direccion    String
-  telefono     String?  @map("telefono")
-  email        String   @unique @map("email")
-  rut          String   @unique @map("rut")
-  plan         String   @default("basic") @map("plan")
-  fechaInicio  DateTime @default(now()) @map("fecha_inicio")
+  telefono     String?   @map("telefono")
+  email        String    @unique @map("email")
+  rut          String    @unique @map("rut")
+  plan         String    @default("basic") @map("plan")
+  fechaInicio  DateTime  @default(now()) @map("fecha_inicio")
   fechaTermino DateTime? @map("fecha_termino")
-  activo       Boolean  @default(true) @map("activo")
-  createdAt    DateTime @default(now()) @map("creado_en")
-  updatedAt    DateTime @updatedAt @map("actualizado_en")
+  activo       Boolean   @default(true) @map("activo")
+  createdAt    DateTime  @default(now()) @map("creado_en")
+  updatedAt    DateTime  @updatedAt @map("actualizado_en")
   users        User[]
 
-  @@schema("users")
   @@map("colegios")
+  @@schema("users")
 }
 
 model User {
   id              String       @id @default(uuid()) @db.Uuid
-  supabaseUserId  String       @unique @map("id_supabase")
+  cognitoSub      String       @unique @map("id_supabase")
   email           String       @unique @map("correo")
   rut             String?      @unique
   nombreCompleto  String       @map("nombre_completo")
@@ -47,8 +47,8 @@ model User {
   logs            LogUsuario[]
 
   @@index([colegioId])
-  @@schema("users")
   @@map("usuarios")
+  @@schema("users")
 }
 
 model LogUsuario {
@@ -63,8 +63,8 @@ model LogUsuario {
 
   @@index([userId])
   @@index([fechaHora])
-  @@schema("users")
   @@map("logs_usuarios")
+  @@schema("users")
 }
 
 enum UserRole {

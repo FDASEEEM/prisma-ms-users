@@ -29,7 +29,7 @@ describe("UsersService", () => {
       prismaService.user.create.mockResolvedValue({ id: "1" });
 
       const result = await service.createProfile({
-        supabaseUserId: "supabase-1",
+        cognitoSub: "supabase-1",
         email: "docente@correo.com",
         rut: "12.345.678-9",
         nombreCompleto: "Juan Pérez",
@@ -49,7 +49,7 @@ describe("UsersService", () => {
       prismaService.user.create.mockResolvedValue({ id: "1" });
 
       await service.createProfile({
-        supabaseUserId: "supabase-1",
+        cognitoSub: "supabase-1",
         email: "docente@correo.com",
         rut: "12.345.678-9",
         nombreCompleto: "Juan Pérez",
@@ -63,7 +63,7 @@ describe("UsersService", () => {
 
       expect(prismaService.user.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          supabaseUserId: "supabase-1",
+          cognitoSub: "supabase-1",
           email: "docente@correo.com",
           rut: "12.345.678-9",
           nombreCompleto: "Juan Pérez",
@@ -76,7 +76,7 @@ describe("UsersService", () => {
       prismaService.user.create.mockResolvedValue({ id: "1" });
 
       await service.createProfile({
-        supabaseUserId: "supabase-1",
+        cognitoSub: "supabase-1",
         email: "docente@correo.com",
         rut: "12.345.678-9",
         nombreCompleto: "Juan Pérez",
@@ -84,7 +84,7 @@ describe("UsersService", () => {
 
       expect(prismaService.user.create).toHaveBeenCalledWith({
         data: expect.objectContaining({
-          supabaseUserId: "supabase-1",
+          cognitoSub: "supabase-1",
           email: "docente@correo.com",
           rut: "12.345.678-9",
           nombreCompleto: "Juan Pérez",
@@ -97,7 +97,7 @@ describe("UsersService", () => {
       prismaService.user.create.mockResolvedValue({ id: "1" });
 
       await service.createProfile({
-        supabaseUserId: "supabase-1",
+        cognitoSub: "supabase-1",
         email: "docente@correo.com",
         rut: "12.345.678-9",
         nombreCompleto: "Juan Pérez",
@@ -112,11 +112,11 @@ describe("UsersService", () => {
     });
   });
 
-  describe("findBySupabaseUserId", () => {
+  describe("findByCognitoSub", () => {
     it("returns profile when found", async () => {
       prismaService.user.findUnique.mockResolvedValue({ id: "1" });
 
-      await expect(service.findBySupabaseUserId("supabase-1")).resolves.toEqual({
+      await expect(service.findByCognitoSub("supabase-1")).resolves.toEqual({
         id: "1",
       });
     });
@@ -125,7 +125,7 @@ describe("UsersService", () => {
       prismaService.user.findUnique.mockResolvedValue(null);
 
       await expect(
-        service.findBySupabaseUserId("missing"),
+        service.findByCognitoSub("missing"),
       ).rejects.toBeInstanceOf(NotFoundException);
     });
   });
@@ -159,7 +159,7 @@ describe("UsersService", () => {
       );
 
       expect(prismaService.user.update).toHaveBeenCalledWith({
-        where: { supabaseUserId: "supabase-1" },
+        where: { cognitoSub: "supabase-1" },
         data: {
           nombreCompleto: "Juan Carlos Pérez",
           active: false,

@@ -1,4 +1,4 @@
-import { ExecutionContext, UnauthorizedException } from '@nestjs/common';
+import { ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
 import { SuperAdminRoleGuard } from './superadmin-role.guard';
 import { CognitoService } from '../../infrastructure/cognito/cognito.service';
 import { UsersService } from '../../users/users.service';
@@ -14,7 +14,7 @@ describe('SuperAdminRoleGuard', () => {
     } as any;
 
     usersService = {
-      findBySupabaseUserId: jest.fn(),
+      findByCognitoSub: jest.fn(),
     } as any;
 
     guard = new SuperAdminRoleGuard(cognitoService, usersService);
@@ -43,21 +43,21 @@ describe('SuperAdminRoleGuard', () => {
     await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
   });
 
-  it('should throw UnauthorizedException if role is not SUPERADMIN', async () => {
+  it('should throw ForbiddenException if role is not SUPERADMIN', async () => {
     const context = createMockContext('Bearer valid-token');
     cognitoService.verifyToken.mockResolvedValue({ sub: 'user-id' });
-    usersService.findBySupabaseUserId.mockResolvedValue({
+    usersService.findByCognitoSub.mockResolvedValue({
       id: 'user-id',
       role: 'ADMIN',
     } as any);
 
-    await expect(guard.canActivate(context)).rejects.toThrow(UnauthorizedException);
+    await expect(guard.canActivate(context)).rejects.toThrow(ForbiddenException);
   });
 
   it('should allow access if role is SUPERADMIN', async () => {
     const context = createMockContext('Bearer valid-token');
     cognitoService.verifyToken.mockResolvedValue({ sub: 'user-id' });
-    usersService.findBySupabaseUserId.mockResolvedValue({
+    usersService.findByCognitoSub.mockResolvedValue({
       id: 'user-id',
       role: 'SUPERADMIN',
     } as any);
@@ -75,7 +75,7 @@ describe('SuperAdminRoleGuard', () => {
     } as ExecutionContext;
 
     cognitoService.verifyToken.mockResolvedValue({ sub: 'user-id' });
-    usersService.findBySupabaseUserId.mockResolvedValue({
+    usersService.findByCognitoSub.mockResolvedValue({
       id: 'user-id',
       role: 'SUPERADMIN',
       email: 'super@test.cl',

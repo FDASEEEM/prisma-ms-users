@@ -1,4 +1,4 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from "@nestjs/common";
+import { CanActivate, ExecutionContext, ForbiddenException, Injectable, UnauthorizedException } from "@nestjs/common";
 import { Request } from "express";
 import { CognitoService } from "../../infrastructure/cognito/cognito.service";
 import { UsersService } from "../../users/users.service";
@@ -26,10 +26,10 @@ export class SuperAdminRoleGuard implements CanActivate {
 
     const payload = await this.cognitoService.verifyToken(token);
 
-    const profile = await this.usersService.findBySupabaseUserId(payload.sub as string);
+    const profile = await this.usersService.findByCognitoSub(payload.sub as string);
 
     if (profile.role !== "SUPERADMIN") {
-      throw new UnauthorizedException("SuperAdmin role required.");
+      throw new ForbiddenException("SuperAdmin role required.");
     }
 
     request.superAdminUser = profile;

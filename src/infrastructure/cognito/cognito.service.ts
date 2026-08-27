@@ -1,5 +1,6 @@
 import { Injectable, UnauthorizedException } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
+import { randomBytes, timingSafeEqual } from "crypto";
 import {
   CognitoIdentityProviderClient,
   AdminCreateUserCommand,
@@ -52,8 +53,11 @@ export class CognitoService {
 
   getGoogleAuthUrl(redirectTo: string): { url: string; state: string } {
     this.getRequiredConfig();
+    this.assertAllowedRedirect(redirectTo);
 
-    const state = Buffer.from(JSON.stringify({ redirectTo })).toString("base64url");
+    // Nonce impredecible en el state: evita login CSRF / inyección de authorization code.
+    const nonce = randomBytes(32).toString("base64url");
+    const state = Buffer.from(JSON.stringify({ nonce, redirectTo })).toString("base64url");
 
     const params = new URLSearchParams({
       response_type: "code",
@@ -73,12 +77,32 @@ export class CognitoService {
   async exchangeGoogleCode(
     code: string,
     state: string,
+    expectedState?: string,
   ): Promise<CognitoSessionResult> {
     this.getRequiredConfig();
 
-    const redirectUri = JSON.parse(
-      Buffer.from(state, "base64url").toString(),
-    ).redirectTo;
+    let parsed: { nonce?: string; redirectTo?: string };
+    try {
+      parsed = JSON.parse(Buffer.from(state, "base64url").toString());
+    } catch {
+      throw new UnauthorizedException("Invalid state.");
+    }
+
+    const redirectUri = parsed.redirectTo;
+    if (typeof redirectUri !== "string" || redirectUri.length === 0) {
+      throw new UnauthorizedException("Invalid state.");
+    }
+    this.assertAllowedRedirect(redirectUri);
+
+    // Si el caller conoce el state que emitió (cookie/sesión), lo comparamos
+    // en tiempo constante para impedir login CSRF (code injection).
+    if (expectedState) {
+      const a = Buffer.from(state);
+      const b = Buffer.from(expectedState);
+      if (a.length !== b.length || !timingSafeEqual(a, b)) {
+        throw new UnauthorizedException("Invalid state.");
+      }
+    }
 
     const tokenResponse = await fetch(
       `${this.domain}/oauth2/token`,
@@ -307,12 +331,23 @@ export class CognitoService {
 
   // ─── JWT Verification via JWKS ────────────────────────────────
 
+  /**
+   * Valida firma, emisor y expiración contra el JWKS de Cognito, y además que el
+   * token haya sido emitido para EL app client de este servicio (`client_id` en
+   * access tokens, `aud` en id tokens). Un token válido de otro app client del
+   * mismo User Pool queda rechazado (segregación entre app clients).
+   */
   async verifyToken(token: string): Promise<jose.JWTPayload> {
     try {
       const jwks = await this.getJwks();
       const { payload } = await jose.jwtVerify(token, jwks, {
         issuer: this.issuer,
       });
+
+      if (this.clientId && payload.client_id !== this.clientId && payload.aud !== this.clientId) {
+        throw new Error("Token was not issued for this app client.");
+      }
+
       return payload;
     } catch {
       throw new UnauthorizedException("Invalid or expired token.");
@@ -335,6 +370,22 @@ export class CognitoService {
       throw new Error(
         "COGNITO_USER_POOL_ID, COGNITO_CLIENT_ID and COGNITO_DOMAIN are required.",
       );
+    }
+  }
+
+  private allowedRedirects(): string[] {
+    return (this.configService.get<string>("GOOGLE_CALLBACK_ALLOWLIST") || "")
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+
+  private assertAllowedRedirect(redirectTo: string): void {
+    if (process.env.NODE_ENV === "production") {
+      const allowed = this.allowedRedirects();
+      if (allowed.length === 0 || !allowed.includes(redirectTo)) {
+        throw new UnauthorizedException("Invalid callback URL.");
+      }
     }
   }
 }

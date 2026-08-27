@@ -57,7 +57,7 @@ export class AuthService {
       }
 
       const profile = await this.usersService.createProfile({
-        supabaseUserId: cognitoResult.id,
+        cognitoSub: cognitoResult.id,
         email: dto.email,
         rut: dto.rut,
         nombreCompleto: dto.nombreCompleto,
@@ -105,7 +105,7 @@ export class AuthService {
     try {
       const session = await this.cognitoService.login(dto.email, dto.password);
 
-      const profile = await this.usersService.findBySupabaseUserId(session.user.id);
+      const profile = await this.usersService.findByCognitoSub(session.user.id);
 
       await this.auditService.registrarEvento({
         tipoEvento: "login",
@@ -144,7 +144,7 @@ export class AuthService {
     try {
       const session = await this.cognitoService.refresh(dto.refreshToken);
 
-      const profile = await this.usersService.findBySupabaseUserId(session.user.id);
+      const profile = await this.usersService.findByCognitoSub(session.user.id);
 
       await this.auditService.registrarEvento({
         tipoEvento: "refresh",
@@ -185,9 +185,9 @@ export class AuthService {
     return this.cognitoService.getGoogleAuthUrl(redirectTo);
   }
 
-  async exchangeGoogleCode(code: string, state: string, ipOrigen?: string) {
+  async exchangeGoogleCode(code: string, state: string, ipOrigen?: string, expectedState?: string) {
     try {
-      const session = await this.cognitoService.exchangeGoogleCode(code, state);
+      const session = await this.cognitoService.exchangeGoogleCode(code, state, expectedState);
       const profile = await this.provisionGoogleUser(session.user);
 
       await this.auditService.registrarEvento({
@@ -228,7 +228,7 @@ export class AuthService {
       await this.cognitoService.logout(accessToken);
 
       const cognitoUser = await this.cognitoService.getUser(accessToken);
-      const user = await this.usersService.findBySupabaseUserId(cognitoUser.id);
+      const user = await this.usersService.findByCognitoSub(cognitoUser.id);
 
       await this.auditService.registrarEvento({
         tipoEvento: "logout",
@@ -244,7 +244,7 @@ export class AuthService {
         try {
           const accessToken = this.getBearerToken(authorization);
           const cognitoUser = await this.cognitoService.getUser(accessToken);
-          const user = await this.usersService.findBySupabaseUserId(cognitoUser.id);
+          const user = await this.usersService.findByCognitoSub(cognitoUser.id);
           return user.id;
         } catch {
           return null;
@@ -273,7 +273,7 @@ export class AuthService {
       throw new BadRequestException("Authenticated user not found.");
     }
 
-    return this.usersService.findBySupabaseUserId(userId);
+    return this.usersService.findByCognitoSub(userId);
   }
 
   async updateMe(
@@ -298,7 +298,7 @@ export class AuthService {
     const email = googleUser.email ?? "";
 
     const existing = await this.usersService
-      .findBySupabaseUserId(googleUser.id)
+      .findByCognitoSub(googleUser.id)
       .catch((error) => {
         if (error instanceof NotFoundException) {
           return null;
@@ -316,7 +316,7 @@ export class AuthService {
         await this.usersService.updateProfile(googleUser.id, {
           nombreCompleto: googleName,
         } as any);
-        return this.usersService.findBySupabaseUserId(googleUser.id);
+        return this.usersService.findByCognitoSub(googleUser.id);
       }
       return existing;
     }
@@ -324,7 +324,7 @@ export class AuthService {
     const byEmail = await this.usersService.findByEmail(email);
 
     if (byEmail) {
-      const linked = await this.usersService.linkSupabaseUser(
+      const linked = await this.usersService.linkCognitoSub(
         byEmail.id,
         googleUser.id,
       );
@@ -332,13 +332,13 @@ export class AuthService {
         await this.usersService.updateProfile(googleUser.id, {
           nombreCompleto: googleName,
         } as any);
-        return this.usersService.findBySupabaseUserId(googleUser.id);
+        return this.usersService.findByCognitoSub(googleUser.id);
       }
       return linked;
     }
 
     return this.usersService.createProfile({
-      supabaseUserId: googleUser.id,
+      cognitoSub: googleUser.id,
       email,
       nombreCompleto: googleName ?? email,
       role: "TEACHER",

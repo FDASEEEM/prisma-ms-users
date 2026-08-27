@@ -28,8 +28,8 @@ describe("AuthService", () => {
     findById: jest.fn(),
     createProfile: jest.fn(),
     updateProfile: jest.fn(),
-    findBySupabaseUserId: jest.fn(),
-    linkSupabaseUser: jest.fn(),
+    findByCognitoSub: jest.fn(),
+    linkCognitoSub: jest.fn(),
   };
 
   const auditService = {
@@ -85,7 +85,7 @@ describe("AuthService", () => {
       );
       expect(usersService.createProfile).toHaveBeenCalledWith(
         expect.objectContaining({
-          supabaseUserId: "cognito-1",
+          cognitoSub: "cognito-1",
           email: "test@test.com",
           role: "TEACHER",
         }),
@@ -120,7 +120,7 @@ describe("AuthService", () => {
         expiresIn: 3600,
         user: { id: "cognito-1", email: "test@test.com" },
       });
-      usersService.findBySupabaseUserId.mockResolvedValue({
+      usersService.findByCognitoSub.mockResolvedValue({
         id: "profile-1",
         email: "test@test.com",
       });
@@ -157,7 +157,7 @@ describe("AuthService", () => {
         expiresIn: 3600,
         user: { id: "cognito-1" },
       });
-      usersService.findBySupabaseUserId.mockResolvedValue({
+      usersService.findByCognitoSub.mockResolvedValue({
         id: "profile-1",
         email: "test@test.com",
       });
@@ -209,7 +209,7 @@ describe("AuthService", () => {
           user_metadata: { full_name: "Google User" },
         },
       });
-      usersService.findBySupabaseUserId.mockRejectedValue(new NotFoundException());
+      usersService.findByCognitoSub.mockRejectedValue(new NotFoundException());
       usersService.findByEmail.mockResolvedValue(null);
       usersService.createProfile.mockResolvedValue({
         id: "profile-g",
@@ -222,7 +222,7 @@ describe("AuthService", () => {
       expect(result.access_token).toBe("access-g");
       expect(usersService.createProfile).toHaveBeenCalledWith(
         expect.objectContaining({
-          supabaseUserId: "google-1",
+          cognitoSub: "google-1",
           email: "google@test.com",
           role: "TEACHER",
           nombreCompleto: "Google User",
@@ -230,7 +230,7 @@ describe("AuthService", () => {
       );
     });
 
-    it("links an existing profile by email when there is no supabase user", async () => {
+    it("links an existing profile by email when there is no cognito user", async () => {
       cognitoService.exchangeGoogleCode.mockResolvedValue({
         accessToken: "access-g",
         refreshToken: "refresh-g",
@@ -238,9 +238,9 @@ describe("AuthService", () => {
         expiresIn: 3600,
         user: { id: "google-1", email: "existing@test.com" },
       });
-      usersService.findBySupabaseUserId.mockRejectedValue(new NotFoundException());
+      usersService.findByCognitoSub.mockRejectedValue(new NotFoundException());
       usersService.findByEmail.mockResolvedValue({ id: "profile-existing" });
-      usersService.linkSupabaseUser.mockResolvedValue({
+      usersService.linkCognitoSub.mockResolvedValue({
         id: "profile-existing",
         email: "existing@test.com",
       });
@@ -248,7 +248,7 @@ describe("AuthService", () => {
       const result = await service.exchangeGoogleCode("code-1", "state-1", "ip");
 
       expect(result.user.id).toBe("profile-existing");
-      expect(usersService.linkSupabaseUser).toHaveBeenCalledWith(
+      expect(usersService.linkCognitoSub).toHaveBeenCalledWith(
         "profile-existing",
         "google-1",
       );
@@ -256,15 +256,15 @@ describe("AuthService", () => {
   });
 
   describe("me", () => {
-    it("returns the profile from the authenticated user id (token sub = supabaseUserId)", async () => {
-      usersService.findBySupabaseUserId.mockResolvedValue({
+    it("returns the profile from the authenticated user id (token sub = cognitoSub)", async () => {
+      usersService.findByCognitoSub.mockResolvedValue({
         id: "profile-1",
         email: "test@test.com",
       });
 
       const result = await service.me({ user: { id: "profile-1" } });
 
-      expect(usersService.findBySupabaseUserId).toHaveBeenCalledWith("profile-1");
+      expect(usersService.findByCognitoSub).toHaveBeenCalledWith("profile-1");
       expect(result.id).toBe("profile-1");
     });
   });

@@ -60,11 +60,11 @@ async function main() {
 
   try {
     const users = await prisma.user.findMany({
-      select: { id: true, email: true, role: true, colegioId: true, supabaseUserId: true },
+      select: { id: true, email: true, role: true, colegioId: true, cognitoSub: true },
     });
 
     summary.total = users.length;
-    console.log(`Encontrados ${users.length} usuarios con supabaseUserId.${dryRun ? " (DRY RUN)" : ""}`);
+    console.log(`Encontrados ${users.length} usuarios con cognitoSub.${dryRun ? " (DRY RUN)" : ""}`);
 
     for (const user of users) {
       const attributes = [
@@ -79,10 +79,10 @@ async function main() {
       }
 
       try {
-        // Resolve username from supabaseUserId (which is the Cognito sub)
+        // Resolve username from cognitoSub (which is the Cognito sub)
         const getUserCommand = new AdminGetUserCommand({
           UserPoolId: userPoolId,
-          Username: user.supabaseUserId,
+          Username: user.cognitoSub,
         });
         const cognitoUser = await cognito.send(getUserCommand);
 

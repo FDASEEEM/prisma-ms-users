@@ -15,7 +15,7 @@ export class UsersService {
   async createProfile(dto: CreateUserProfileDto): Promise<User> {
     return this.prismaService.user.create({
       data: {
-        supabaseUserId: dto.supabaseUserId,
+        cognitoSub: dto.cognitoSub,
         email: dto.email,
         rut: dto.rut ?? null,
         nombreCompleto: dto.nombreCompleto,
@@ -30,10 +30,10 @@ export class UsersService {
     });
   }
 
-  async linkSupabaseUser(profileId: string, supabaseUserId: string): Promise<User> {
+  async linkCognitoSub(profileId: string, cognitoSub: string): Promise<User> {
     return this.prismaService.user.update({
       where: { id: profileId },
-      data: { supabaseUserId },
+      data: { cognitoSub },
     } as any);
   }
 
@@ -49,9 +49,9 @@ export class UsersService {
     return user;
   }
 
-  async findBySupabaseUserId(supabaseUserId: string): Promise<User> {
+  async findByCognitoSub(cognitoSub: string): Promise<User> {
     const user = await this.prismaService.user.findUnique({
-      where: { supabaseUserId },
+      where: { cognitoSub },
     });
 
     if (!user) {
@@ -68,12 +68,12 @@ export class UsersService {
   }
 
   async updateProfile(
-    supabaseUserId: string,
+    cognitoSub: string,
     dto: UpdateUserProfileDto,
     ipOrigen?: string,
   ): Promise<User> {
     const currentUser = await this.prismaService.user.findUnique({
-      where: { supabaseUserId },
+      where: { cognitoSub },
     });
 
     if (!currentUser) {
@@ -82,7 +82,7 @@ export class UsersService {
 
     try {
       const updatedUser = await this.prismaService.user.update({
-        where: { supabaseUserId },
+        where: { cognitoSub },
         data: {
           nombreCompleto: dto.nombreCompleto,
           establecimiento: dto.establecimiento,

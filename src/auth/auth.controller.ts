@@ -83,7 +83,12 @@ export class AuthController {
     description: "Sesión iniciada con Google correctamente.",
   })
   googleCallback(@Req() request: Request, @Body() dto: GoogleCallbackDto) {
-    return this.authService.exchangeGoogleCode(dto.code, dto.state, request.ip);
+    return this.authService.exchangeGoogleCode(
+      dto.code,
+      dto.state,
+      request.ip,
+      dto.expectedState,
+    );
   }
 
   @UseGuards(CognitoAuthGuard)

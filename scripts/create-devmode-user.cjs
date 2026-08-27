@@ -34,8 +34,8 @@ async function main() {
   const envPath = path.join(__dirname, "..", ".env");
   loadEnv(envPath);
 
-  const email = "devmode@prisma.local";
-  const password = "devmode1";
+  const email = process.argv[2] || "devmode@prisma.local";
+  const password = process.argv[3] || "devmode1";
   const desiredRutCandidates = [
     "99.999.999-9",
     "98.888.888-8",
@@ -117,7 +117,7 @@ async function main() {
     const profile = await prisma.user.upsert({
       where: { email },
       update: {
-        supabaseUserId: authSub,
+        cognitoSub: authSub,
         rut,
         nombreCompleto: "Dev Mode Prisma",
         establecimiento: "PRISMA",
@@ -128,7 +128,7 @@ async function main() {
         role: "ADMIN",
       },
       create: {
-        supabaseUserId: authSub,
+        cognitoSub: authSub,
         email,
         rut,
         nombreCompleto: "Dev Mode Prisma",

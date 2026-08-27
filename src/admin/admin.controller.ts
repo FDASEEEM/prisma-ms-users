@@ -104,7 +104,7 @@ export class AdminController {
     const user = await this.prismaService.user.create({
       data: {
         email: body.email,
-        supabaseUserId: cognitoResult.id,
+        cognitoSub: cognitoResult.id,
         rut:
           body.rut ||
           `${Date.now()
@@ -162,13 +162,13 @@ export class AdminController {
         role: true,
         nombreCompleto: true,
         colegioId: true,
-        supabaseUserId: true,
+        cognitoSub: true,
       },
     });
 
     // Sync role/colegioId to Cognito custom attributes so the next token carries the tenant.
-    if (user.supabaseUserId) {
-      await this.cognitoService.updateUserAppMetadata(user.supabaseUserId, {
+    if (user.cognitoSub) {
+      await this.cognitoService.updateUserAppMetadata(user.cognitoSub, {
         role: user.role,
         colegioId: user.colegioId ?? null,
       });
@@ -250,7 +250,7 @@ export class AdminController {
         ? body.newPassword
         : this.generateTemporaryPassword();
 
-    await this.cognitoService.resetUserPassword(user.supabaseUserId, newPassword);
+    await this.cognitoService.resetUserPassword(user.cognitoSub, newPassword);
 
     if (user.role === "ADMIN") {
       await this.auditService.registrarEvento({

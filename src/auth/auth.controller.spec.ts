@@ -93,6 +93,7 @@ describe("AuthController", () => {
         "the-code",
         "pkce-state",
         "192.168.1.1",
+        undefined,
       );
       expect(result).toEqual({ access_token: "access" });
     });

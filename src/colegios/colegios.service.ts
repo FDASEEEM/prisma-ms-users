@@ -30,7 +30,7 @@ export class ColegiosService {
       throw new ConflictException("Ya existe un usuario con ese email de admin.");
     }
 
-    let supabaseUserId: string | null = null;
+    let cognitoSub: string | null = null;
     try {
       const cognitoResult = await this.cognitoService.createUserWithPasswordAndMetadata(
         dto.adminEmail,
@@ -41,7 +41,7 @@ export class ColegiosService {
       if (!cognitoResult?.id) {
         throw new Error("Error creating admin user in Cognito");
       }
-      supabaseUserId = cognitoResult.id;
+      cognitoSub = cognitoResult.id;
     } catch (error) {
       await this.auditService.registrarEvento({
         tipoEvento: "colegio_create",
@@ -72,7 +72,7 @@ export class ColegiosService {
 
       const adminUser = await this.prismaService.user.create({
         data: {
-          supabaseUserId,
+          cognitoSub,
           email: dto.adminEmail,
           rut: `${Date.now().toString().slice(-8).replace(/(\d{2})(\d{3})(\d{3})/, "$1.$2.$3")}-0`,
           nombreCompleto: dto.adminNombre,
@@ -83,7 +83,7 @@ export class ColegiosService {
       });
 
       // Update Cognito custom attributes with the correct colegioId
-      await this.cognitoService.updateUserAppMetadata(supabaseUserId, {
+      await this.cognitoService.updateUserAppMetadata(cognitoSub, {
         role: "ADMIN",
         colegioId: colegio.id,
       });
@@ -106,8 +106,8 @@ export class ColegiosService {
         },
       };
     } catch (error) {
-      if (supabaseUserId) {
-        await this.cognitoService.deleteUser(supabaseUserId);
+      if (cognitoSub) {
+        await this.cognitoService.deleteUser(cognitoSub);
       }
       await this.auditService.registrarEvento({
         tipoEvento: "colegio_create",

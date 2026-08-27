@@ -10,9 +10,9 @@ import {
 import { USER_ROLES, type UserRole } from "../user-role";
 
 export class CreateUserProfileDto {
-  @ApiProperty({ example: "supabase-user-id" })
+  @ApiProperty({ example: "cognito-user-sub" })
   @IsString()
-  supabaseUserId!: string;
+  cognitoSub!: string;
 
   @ApiProperty({ example: "docente@correo.com" })
   @IsEmail()
